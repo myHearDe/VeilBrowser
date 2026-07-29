@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$Force
+    [switch]$Force,
+    [switch]$SkipSourceArchive
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +16,8 @@ $extensionUrl = "https://github.com/AdguardTeam/AdguardBrowserExtension/releases
 $extensionSha256 = "C91CBB56BBAACC96CB7B9554D9728158CE1791E02895EA5CA5D909CD4764C2F1"
 $sourceUrl = "https://github.com/AdguardTeam/AdguardBrowserExtension/archive/refs/tags/v$version.zip"
 $sourceSha256 = "17B92B201B69F1F8B6304C8E46DB51DA11F1EAB6093260AF082D4B4F5C410F0E"
+$licenseUrl = "https://raw.githubusercontent.com/AdguardTeam/AdguardBrowserExtension/v$version/LICENSE"
+$licenseSha256 = "3972DC9744F6499F0F9B2DBF76696F2AE7AD8AF9B23DDE66D6AF86C9DFB36986"
 
 function Assert-FileHash {
     param(
@@ -75,39 +78,53 @@ if (-not $extensionReady -or $Force) {
     Remove-Item -LiteralPath $extensionArchive -Force
 }
 
-$sourceReady = Test-Path -LiteralPath $sourceArchive
-if ($sourceReady -and -not $Force) {
+$sourceReady = $false
+if (-not $SkipSourceArchive) {
+    $sourceReady = Test-Path -LiteralPath $sourceArchive
+    if ($sourceReady -and -not $Force) {
+        try {
+            Assert-FileHash -Path $sourceArchive -Expected $sourceSha256
+        }
+        catch {
+            $sourceReady = $false
+        }
+    }
+
+    if (-not $sourceReady -or $Force) {
+        Download-VerifiedFile -Uri $sourceUrl -Destination $sourceArchive -Sha256 $sourceSha256
+    }
+}
+
+# The release ZIP does not carry the repository license file. Full packaging
+# extracts it from the matching source archive; normal builds download only the
+# small, pinned license so CI does not need the ~100 MB source archive.
+$licensePath = Join-Path $extensionRoot "LICENSE"
+if ($SkipSourceArchive) {
+    if ($Force -or -not (Test-Path -LiteralPath $licensePath)) {
+        Download-VerifiedFile -Uri $licenseUrl -Destination $licensePath -Sha256 $licenseSha256
+    }
+    Assert-FileHash -Path $licensePath -Expected $licenseSha256
+}
+else {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $sourceZip = [System.IO.Compression.ZipFile]::OpenRead($sourceArchive)
     try {
-        Assert-FileHash -Path $sourceArchive -Expected $sourceSha256
+        $licenseEntry = $sourceZip.Entries |
+            Where-Object { $_.FullName -match '/LICENSE$' } |
+            Select-Object -First 1
+        if (-not $licenseEntry) {
+            throw "The pinned source archive does not contain LICENSE."
+        }
+        [System.IO.Compression.ZipFileExtensions]::ExtractToFile(
+            $licenseEntry,
+            $licensePath,
+            $true
+        )
     }
-    catch {
-        $sourceReady = $false
+    finally {
+        $sourceZip.Dispose()
     }
-}
-
-if (-not $sourceReady -or $Force) {
-    Download-VerifiedFile -Uri $sourceUrl -Destination $sourceArchive -Sha256 $sourceSha256
-}
-
-# The release ZIP does not carry the repository license file. Copy the exact
-# GPLv3 license from the matching source archive into the packaged extension.
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$sourceZip = [System.IO.Compression.ZipFile]::OpenRead($sourceArchive)
-try {
-    $licenseEntry = $sourceZip.Entries |
-        Where-Object { $_.FullName -match '/LICENSE$' } |
-        Select-Object -First 1
-    if (-not $licenseEntry) {
-        throw "The pinned source archive does not contain LICENSE."
-    }
-    [System.IO.Compression.ZipFileExtensions]::ExtractToFile(
-        $licenseEntry,
-        (Join-Path $extensionRoot "LICENSE"),
-        $true
-    )
-}
-finally {
-    $sourceZip.Dispose()
+    Assert-FileHash -Path $licensePath -Expected $licenseSha256
 }
 
 $sourceText = @"
@@ -122,7 +139,9 @@ Source archive SHA256: $sourceSha256
 "@
 $sourceText | Set-Content -LiteralPath (Join-Path $extensionRoot "SOURCE.txt") -Encoding UTF8
 
-Assert-FileHash -Path $sourceArchive -Expected $sourceSha256
+if (-not $SkipSourceArchive) {
+    Assert-FileHash -Path $sourceArchive -Expected $sourceSha256
+}
 if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "AdGuard setup did not produce $manifestPath."
 }

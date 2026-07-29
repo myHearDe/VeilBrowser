@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $projectRoot
 
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "setup-adguard.ps1")
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "setup-adguard.ps1") -SkipSourceArchive
 if ($LASTEXITCODE -ne 0) {
     throw "AdGuard setup failed with exit code $LASTEXITCODE."
 }

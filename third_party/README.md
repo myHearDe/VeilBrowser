@@ -17,3 +17,5 @@ release, verifies both SHA-256 hashes, and prepares:
 - `third_party\AdGuardBrowserExtension-source-v5.4.3.1.zip`
 
 The normal build and publish scripts call this setup script automatically.
+Regular builds download only the extension and license; release publishing also
+downloads the corresponding source archive for GPL compliance.
