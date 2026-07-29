@@ -1,0 +1,120 @@
+<Window x:Class="VeilBrowser.Views.SecuritySettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource AppWindowStyle}"
+        Title="安全与隐私设置" Width="800" Height="760"
+        MinWidth="680" MinHeight="640" WindowStartupLocation="CenterOwner"
+        UseLayoutRounding="True"
+        Loaded="Window_Loaded">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="36,30">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="42" Height="42" CornerRadius="12" Background="#173A38"
+                            Margin="0,0,13,0">
+                        <TextBlock Text="◆" Foreground="{StaticResource AccentBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   FontSize="15" />
+                    </Border>
+                    <StackPanel>
+                        <TextBlock Text="安全与隐私" FontSize="28" FontWeight="SemiBold" />
+                        <TextBlock Text="SECURITY CONTROL"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   FontSize="10" FontWeight="Bold" />
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock Text="磁盘加密始终开启；下列开关决定何时需要再次验证。"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Margin="0,12,0,24" />
+
+                <Border Background="{StaticResource SurfaceBrush}" Padding="22" Margin="0,0,0,16"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="14">
+                    <StackPanel>
+                        <TextBlock Text="主锁" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock x:Name="KeyModeText"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,5,0,10" TextWrapping="Wrap" />
+                        <CheckBox x:Name="StartupLockCheck" Content="启动浏览器时要求主密码" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="闲置自动锁定（分钟）" VerticalAlignment="Center" />
+                            <TextBox x:Name="AutoLockBox" Width="70" Margin="12,0,0,0" Text="10" />
+                            <TextBlock Text="填 0 表示关闭" Foreground="{StaticResource MutedTextBrush}"
+                                       VerticalAlignment="Center" Margin="10,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="PasswordChangePanel" Background="{StaticResource SurfaceBrush}"
+                        Padding="22" Margin="0,0,0,16"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="14">
+                    <StackPanel>
+                        <TextBlock x:Name="PasswordPanelTitle" Text="更改主密码"
+                                   FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="留空表示不更改。新密码至少 10 个字符。"
+                                   Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,10" />
+                        <PasswordBox x:Name="NewPasswordBox" Margin="0,0,0,8"
+                                     PasswordChanged="NewPasswordBox_PasswordChanged" />
+                        <PasswordBox x:Name="ConfirmPasswordBox" />
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{StaticResource SurfaceBrush}" Padding="22" Margin="0,0,0,16"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="14">
+                    <StackPanel>
+                        <TextBlock Text="各区域单独上锁" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AreaLockHint"
+                                   Text="打开这些页面前再次验证主密码。"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,5,0,10" />
+                        <UniformGrid x:Name="AreaLocksGrid" Columns="2">
+                            <CheckBox Content="浏览历史" Tag="History" />
+                            <CheckBox Content="下载记录" Tag="Downloads" />
+                            <CheckBox Content="书签收藏" Tag="Bookmarks" />
+                            <CheckBox Content="密码保险库" Tag="Passwords" />
+                            <CheckBox Content="Cookie 与网站数据" Tag="CookiesAndSiteData" />
+                            <CheckBox Content="会话恢复记录" Tag="Sessions" />
+                            <CheckBox Content="自动填充资料" Tag="Autofill" />
+                            <CheckBox Content="安全设置" Tag="Settings" />
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{StaticResource SurfaceBrush}" Padding="22"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="14">
+                    <StackPanel>
+                        <TextBlock Text="浏览防护" FontSize="18" FontWeight="SemiBold" />
+                        <CheckBox x:Name="TrackingProtectionCheck"
+                                  Content="启用 WebView2 严格跟踪防护（与 AdGuard 叠加）" />
+                        <CheckBox x:Name="ThirdPartyCookiesCheck"
+                                  Content="阻止第三方 Cookie（重启后完全生效）" />
+                        <CheckBox x:Name="WebRtcCheck"
+                                  Content="限制 WebRTC 非代理 UDP，降低本地 IP 泄漏" />
+                        <CheckBox x:Name="ClearCacheCheck"
+                                  Content="关闭时清除缓存（Cookie 与登录状态仍保留在加密容器）" />
+                        <TextBlock Text="主页" Margin="0,10,0,5" />
+                        <TextBox x:Name="HomePageBox" />
+                    </StackPanel>
+                </Border>
+                <TextBlock x:Name="ErrorText" Foreground="#FB7185"
+                           TextWrapping="Wrap" Margin="0,14,0,0" />
+            </StackPanel>
+        </ScrollViewer>
+        <Border Grid.Row="1" Background="{StaticResource ChromeBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
+                Padding="18">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="取消" Width="100" IsCancel="True" />
+                <Button x:Name="SaveButton" Content="保存设置" Width="110"
+                        Style="{StaticResource PrimaryButton}" Click="Save_Click" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

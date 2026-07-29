@@ -1,0 +1,31 @@
+# Visual Studio / .NET build state
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Generated release packages and installer smoke logs
+artifacts/
+
+# AdGuard is downloaded from its pinned upstream release by
+# scripts/setup-adguard.ps1. Do not duplicate the large upstream artifacts in Git.
+third_party/AdGuardBrowserExtension/
+third_party/AdGuardBrowserExtension-source-*.zip
+
+# Local signing material and secrets must never be committed
+*.pfx
+*.p12
+*.pvk
+*.snk
+*.key
+*.pem
+.env
+.env.*
+!.env.example
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.tmp
+*.log

@@ -1,0 +1,108 @@
+<Window x:Class="VeilBrowser.Views.StartupGateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource AppWindowStyle}"
+        Title="隐栈浏览器"
+        Width="560" Height="680"
+        MinWidth="460" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Loaded="Window_Loaded">
+    <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#080D18" Offset="0" />
+                <GradientStop Color="#0D1D2D" Offset="1" />
+            </LinearGradientBrush>
+        </Grid.Background>
+        <Border Margin="28" Padding="26"
+                Background="#E6111B2E"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                CornerRadius="20">
+        <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <Border Width="48" Height="48" CornerRadius="15" Background="#173A38"
+                    HorizontalAlignment="Left" Margin="0,0,0,16">
+                <TextBlock Text="◆" Foreground="{StaticResource AccentBrush}"
+                           FontSize="18" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="VEIL / 隐栈浏览器" Foreground="{StaticResource AccentBrush}"
+                       FontSize="13" FontWeight="Bold" />
+            <TextBlock x:Name="HeroTitleText" Text="欢迎回来"
+                       FontSize="31" FontWeight="SemiBold"
+                       Margin="0,5,0,8" />
+            <TextBlock Text="浏览数据在关闭后进入加密容器。密码不会上传。"
+                       Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1"
+                      Margin="0,24,0,16"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      CanContentScroll="False">
+            <Grid>
+                <StackPanel x:Name="SetupPanel" Visibility="Collapsed">
+                    <TextBlock Text="首次安全设置" FontSize="18" FontWeight="SemiBold"
+                               Margin="0,0,0,12" />
+                    <Border Background="{StaticResource SurfaceBrush}" Padding="16" Margin="0,0,0,12">
+                        <StackPanel>
+                            <RadioButton x:Name="PasswordModeRadio" IsChecked="True"
+                                         Content="使用主密码（推荐，可给每个区域单独上锁）"
+                                         Checked="ModeRadio_Changed" />
+                            <RadioButton x:Name="WindowsModeRadio"
+                                         Content="不设浏览器密码，仅由 Windows 当前账户保护密钥"
+                                         Checked="ModeRadio_Changed" />
+                        </StackPanel>
+                    </Border>
+                    <StackPanel x:Name="PasswordSetupPanel">
+                        <TextBlock Text="主密码（至少 10 个字符）" Margin="0,0,0,5" />
+                        <PasswordBox x:Name="NewPasswordBox" MinHeight="36" Margin="0,0,0,12" />
+                        <TextBlock Text="再次输入" Margin="0,0,0,5" />
+                        <PasswordBox x:Name="ConfirmPasswordBox" MinHeight="36" Margin="0,0,0,10" />
+                        <CheckBox x:Name="StartupLockCheck" IsChecked="True"
+                                  Content="每次启动都要求输入主密码" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="UnlockPanel" Visibility="Collapsed">
+                    <TextBlock Text="浏览器已锁定" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="输入主密码解密本地资料和 WebView2 配置。"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,18" />
+                    <PasswordBox x:Name="UnlockPasswordBox" MinHeight="36"
+                                 KeyDown="UnlockPasswordBox_KeyDown" />
+                </StackPanel>
+
+                <StackPanel x:Name="BusyPanel" HorizontalAlignment="Center"
+                            VerticalAlignment="Center" Visibility="Collapsed">
+                    <ProgressBar IsIndeterminate="True" Width="250" Height="5" />
+                    <TextBlock x:Name="BusyText" Text="正在安全解锁…"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               HorizontalAlignment="Center" Margin="0,14,0,0" />
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2">
+            <TextBlock x:Name="ErrorText" Foreground="#FB7185"
+                       TextWrapping="Wrap" Margin="0,0,0,8" />
+            <Button x:Name="PrimaryButton" Style="{StaticResource PrimaryButton}"
+                    Content="继续" Height="44" Click="PrimaryButton_Click" />
+            <TextBlock Text="忘记主密码且没有备份时，加密数据无法恢复。"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       FontSize="12" HorizontalAlignment="Center" Margin="0,10,0,0" />
+        </StackPanel>
+        </Grid>
+        </Border>
+    </Grid>
+</Window>

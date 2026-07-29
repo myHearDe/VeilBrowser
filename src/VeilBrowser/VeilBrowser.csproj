@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>VeilBrowser</AssemblyName>
+    <RootNamespace>VeilBrowser</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AssemblyTitle>VeilBrowser 隐栈浏览器</AssemblyTitle>
+    <Product>VeilBrowser</Product>
+    <Description>本地加密、可分区上锁的 Edge WebView2 隐私浏览器</Description>
+    <Version>0.3.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VeilBrowser.Core\VeilBrowser.Core.csproj" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\third_party\AdGuardBrowserExtension\**\*">
+      <Link>Extensions\AdGuard\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\third_party\AdGuardBrowserExtension-source-v5.4.3.1.zip">
+      <Link>ThirdPartySource\AdGuardBrowserExtension-source-v5.4.3.1.zip</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+  <Target Name="ValidateBundledAdGuard" BeforeTargets="PrepareForBuild">
+    <Error
+      Condition="!Exists('..\..\third_party\AdGuardBrowserExtension\manifest.json')"
+      Text="Bundled AdGuard extension is missing manifest.json." />
+    <Error
+      Condition="!Exists('..\..\third_party\AdGuardBrowserExtension\LICENSE')"
+      Text="Bundled AdGuard extension is missing its GPLv3 license." />
+    <Error
+      Condition="!Exists('..\..\third_party\AdGuardBrowserExtension-source-v5.4.3.1.zip')"
+      Text="Bundled AdGuard corresponding source archive is missing." />
+  </Target>
+</Project>

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/VeilBrowser.Core/VeilBrowser.Core.csproj" />
+  <Project Path="src/VeilBrowser/VeilBrowser.csproj" />
+  <Project Path="tests/VeilBrowser.Core.SmokeTests/VeilBrowser.Core.SmokeTests.csproj" />
+</Solution>
