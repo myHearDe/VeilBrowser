@@ -38,6 +38,7 @@ dotnet publish .\src\VeilBrowser\VeilBrowser.csproj `
     --self-contained true `
     --no-restore `
     -p:PublishSingleFile=false `
+    -p:RequireAdGuardSourceArchive=true `
     -p:BaseOutputPath="$artifactRoot\publish-build\" `
     -o $publishRoot
 if ($LASTEXITCODE -ne 0) {
