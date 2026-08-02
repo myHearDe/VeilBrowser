@@ -47,6 +47,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Copy-Item .\README.md $publishRoot
 Copy-Item .\LICENSE $publishRoot
+Copy-Item .\LICENSE-SCOPE.md $publishRoot
 Copy-Item .\THIRD-PARTY-NOTICES.md $publishRoot
 Copy-Item .\scripts\clean-local-data.ps1 (Join-Path $publishRoot "Clean-Local-Data.ps1")
 Compress-Archive -Path (Join-Path $publishRoot "*") -DestinationPath $zipPath -CompressionLevel Optimal

@@ -1,6 +1,6 @@
 # VeilBrowser 隐栈浏览器
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![Windows x64](https://img.shields.io/badge/Windows-10%2F11%20x64-0078D4)
 [![Build](https://github.com/myHearDe/VeilBrowser/actions/workflows/build.yml/badge.svg)](https://github.com/myHearDe/VeilBrowser/actions/workflows/build.yml)
@@ -203,7 +203,12 @@ Windows 媒体组件、显卡驱动和目标网站策略。
 
 ## 许可证
 
-本项目自身源码使用 MIT License。内置 AdGuard Browser Extension 是独立第三方组件，
-使用 GNU GPLv3；Microsoft WebView2 Runtime、Chromium 及其他第三方组件保留各自
-许可证。构建产物中的 `Extensions\AdGuard\LICENSE`、`ThirdPartySource` 和其他
-许可证文件不得删除。
+VeilBrowser 自有源码采用 **GNU General Public License v3.0 only
+（GPL-3.0-only）** 开源。你可以运行、研究、修改和再分发本项目，但分发修改版或
+基于本项目形成的组合程序时，必须继续遵守 GPLv3，包括提供对应源代码和保留许可声明。
+
+内置 AdGuard Browser Extension 及 VeilBrowser 对它的集成桥接同样使用 GNU GPLv3；
+Microsoft WebView2 Runtime、Chromium、Argon2 和其他第三方组件仍保留各自许可证，
+不会因本项目改用 GPLv3 而被重新许可。构建产物中的 `LICENSE`、
+`Extensions\AdGuard\LICENSE`、`ThirdPartySource`、`THIRD-PARTY-NOTICES.md` 和其他
+许可证文件不得删除。详细适用范围见 [LICENSE-SCOPE.md](LICENSE-SCOPE.md)。

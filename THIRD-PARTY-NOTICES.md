@@ -17,7 +17,8 @@ GPLv3 license text and source reference are included as `LICENSE` and
 `SOURCE.txt` in that directory. The exact corresponding upstream source archive
 is included at
 `ThirdPartySource/AdGuardBrowserExtension-source-v5.4.3.1.zip`. VeilBrowser's
-MIT license does not replace or override the extension's GPLv3 terms.
+GPLv3 license does not replace or override the extension's own copyright
+notices or the license terms of any other third-party component.
 
 References:
 

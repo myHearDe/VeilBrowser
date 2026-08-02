@@ -5,5 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Deterministic>true</Deterministic>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/myHearDe/VeilBrowser</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/myHearDe/VeilBrowser.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (C) 2026 myHearDe</Copyright>
   </PropertyGroup>
 </Project>

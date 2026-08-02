@@ -19,3 +19,7 @@ release, verifies both SHA-256 hashes, and prepares:
 The normal build and publish scripts call this setup script automatically.
 Regular builds download only the extension and license; release publishing also
 downloads the corresponding source archive for GPL compliance.
+
+VeilBrowser's project-authored source is licensed under GPL-3.0-only. Files in
+this directory remain governed by the license identified for each component;
+see `..\LICENSE-SCOPE.md` and `..\THIRD-PARTY-NOTICES.md`.

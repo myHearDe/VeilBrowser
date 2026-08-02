@@ -1,5 +1,14 @@
 # 更新日志
 
+## 未发布
+
+### 许可证
+
+- VeilBrowser 自有源码由 MIT License 统一切换为 GNU GPLv3-only。
+- 内置 AdGuard 与 VeilBrowser AdGuard 集成桥接继续遵循 GNU GPLv3。
+- 增加许可证适用范围说明和项目构建元数据，并确保发布包携带许可证文件。
+- Microsoft WebView2、Chromium、Argon2、Inno Setup 语言文件等第三方内容继续遵循各自许可证。
+
 ## 0.4.0（相对 0.3.0）
 
 0.4.0 是一次覆盖界面、加密、安全、AdGuard、标签交互和发布流程的完整升级。
