@@ -5,6 +5,9 @@ using System.Net;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Shell;
 using Microsoft.Web.WebView2.Core;
 using VeilBrowser.Browser;
 using VeilBrowser.Core.Models;
@@ -15,6 +18,8 @@ namespace VeilBrowser.Views;
 
 public partial class BrowserWindow : Window
 {
+    private const int WmGetMinMaxInfo = 0x0024;
+
     private readonly AppSession _session;
     private readonly CoreWebView2Environment _webViewEnvironment;
     private readonly BrowserDownloadHandler _downloadHandler;
@@ -26,9 +31,14 @@ public partial class BrowserWindow : Window
     private bool _allowClose;
     private bool _emergencyExit;
     private bool _clearSiteDataOnExit;
+    private List<string>? _shutdownSessionUrls;
     private bool _isFullscreen;
+    private bool _previousTopmost;
+    private Rect _previousWindowBounds;
+    private ResizeMode _previousResizeMode;
     private WindowStyle _previousWindowStyle;
     private WindowState _previousWindowState;
+    private HwndSource? _windowSource;
     private string? _uninstallerToLaunch;
     private ExtensionPageWindow? _extensionWindow;
 
@@ -37,7 +47,13 @@ public partial class BrowserWindow : Window
         CoreWebView2Environment webViewEnvironment)
     {
         InitializeComponent();
+        TopChrome.AddHandler(
+            Control.MouseDoubleClickEvent,
+            new MouseButtonEventHandler(TopChrome_MouseDoubleClick),
+            handledEventsToo: true);
         _session = session;
+        ThemeManager.Apply(_session.State.Preferences.Theme);
+        ApplyThemeLayout();
         _webViewEnvironment = webViewEnvironment;
         _downloadHandler = new BrowserDownloadHandler(OnDownloadUpdated);
         _extensionManager = new BrowserExtensionManager(
@@ -74,14 +90,17 @@ public partial class BrowserWindow : Window
 
     private async void AddTab(string? address = null)
     {
-        var target = NormalizeAddress(address ?? _session.State.Preferences.HomePage);
+        var target = address is null
+            ? GetNewTabAddress()
+            : NormalizeAddress(address);
         var browserTab = new BrowserTab(
             _webViewEnvironment,
             _downloadHandler,
             _extensionManager,
             _session.State.Preferences.TrackingProtectionEnabled,
             url => Dispatcher.Invoke(() => AddTab(url)),
-            fullscreen => Dispatcher.Invoke(() => SetFullscreen(fullscreen)));
+            fullscreen => Dispatcher.Invoke(() => SetFullscreen(fullscreen)),
+            RequestSitePermission);
 
         var closeButton = new Button
         {
@@ -100,7 +119,13 @@ public partial class BrowserWindow : Window
         var header = new StackPanel { Orientation = Orientation.Horizontal };
         header.Children.Add(title);
         header.Children.Add(closeButton);
-        var item = new TabItem { Header = header, Tag = title };
+        var item = new TabItem
+        {
+            Header = header,
+            Tag = title,
+            Style = GetTabItemStyle()
+        };
+        WindowChrome.SetIsHitTestVisibleInChrome(item, true);
         item.ContextMenu = CreateTabContextMenu(item, browserTab);
 
         browserTab.TitleChanged += (_, newTitle) =>
@@ -116,6 +141,7 @@ public partial class BrowserWindow : Window
             if (ReferenceEquals(CurrentTab, browserTab))
             {
                 AddressBox.Text = newAddress;
+                UpdateBookmarkUi();
             }
         };
         browserTab.LoadingStateChanged += (_, isLoading) =>
@@ -161,8 +187,8 @@ public partial class BrowserWindow : Window
                 : (System.Windows.Media.Brush)FindResource("MutedTextBrush");
             AdGuardBadge.Text = _extensionManager.IsEnabled ? "ON" : "OFF";
             AdGuardButton.ToolTip = _extensionManager.IsEnabled
-                ? "AdGuard 正在保护网页"
-                : "AdGuard 已暂停";
+                ? $"AdGuard 正在保护网页 · Chromium {_extensionManager.RuntimeVersion}"
+                : $"AdGuard 已暂停 · Chromium {_extensionManager.RuntimeVersion}";
         }
         else
         {
@@ -176,8 +202,8 @@ public partial class BrowserWindow : Window
 
     private void AdGuard_Click(object sender, RoutedEventArgs e)
     {
-        var popupUrl = _extensionManager.GetPageUrl("popup.html");
-        if (popupUrl is null)
+        var controlUrl = _extensionManager.GetPageUrl("veil-control.html");
+        if (controlUrl is null)
         {
             MessageBox.Show(
                 _extensionManager.ErrorMessage ?? "AdGuard 尚未完成初始化，请稍后重试。",
@@ -187,11 +213,17 @@ public partial class BrowserWindow : Window
             return;
         }
 
+        controlUrl += "?theme=" + GetThemeQueryValue(_session.State.Preferences.Theme);
+        var targetAddress = CurrentTab?.Address;
+        if (!string.IsNullOrWhiteSpace(targetAddress))
+        {
+            controlUrl += "&target=" + Uri.EscapeDataString(targetAddress);
+        }
+
         _extensionWindow?.Close();
         _extensionWindow = new ExtensionPageWindow(
             _webViewEnvironment,
-            popupUrl,
-            CurrentTab?.Address,
+            controlUrl,
             url => AddTab(url))
         {
             Owner = this,
@@ -317,6 +349,7 @@ public partial class BrowserWindow : Window
         BrowserHost.Children.Add(tab.Browser);
         AddressBox.Text = tab.Address;
         Title = $"{tab.Title} — 隐栈浏览器";
+        UpdateBookmarkUi();
         tab.Browser.Focus();
     }
 
@@ -357,6 +390,8 @@ public partial class BrowserWindow : Window
                 ? $"下载完成：{entry.FileName}"
                 : entry.IsCancelled
                     ? $"下载已取消：{entry.FileName}"
+                    : entry.IsInterrupted
+                        ? $"下载中断：{entry.FileName} ({entry.InterruptReason})"
                     : $"正在下载：{entry.FileName}";
         });
     }
@@ -458,23 +493,108 @@ public partial class BrowserWindow : Window
     private void AddressBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
         AddressBox.SelectAll();
 
-    private void Bookmark_Click(object sender, RoutedEventArgs e)
+    private async void Bookmark_Click(object sender, RoutedEventArgs e)
     {
         if (CurrentTab is null || string.IsNullOrWhiteSpace(CurrentTab.Address))
         {
+            StatusText.Text = "当前页面无法收藏";
             return;
         }
 
         var url = CurrentTab.Address;
-        if (_session.State.Bookmarks.Any(x => x.Url == url))
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https"))
         {
-            StatusText.Text = "该页面已在收藏夹中";
+            StatusText.Text = "只有 http/https 页面可以加入收藏";
             return;
         }
 
-        _session.State.Bookmarks.Add(
-            new BookmarkEntry(Guid.NewGuid(), CurrentTab.Title, url, DateTimeOffset.Now));
-        StatusText.Text = "已收藏当前页面";
+        var existing = FindBookmark(url);
+        var title = string.IsNullOrWhiteSpace(CurrentTab.Title)
+            ? uri.Host
+            : CurrentTab.Title;
+        var editor = new BookmarkEditorWindow(title, url, existing)
+        {
+            Owner = this
+        };
+        if (editor.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var previousBookmarks = _session.State.Bookmarks.ToList();
+        string successMessage;
+        if (editor.DeleteRequested && existing is not null)
+        {
+            _session.State.Bookmarks.Remove(existing);
+            successMessage = "已取消收藏";
+        }
+        else if (editor.Entry is not null)
+        {
+            if (existing is null)
+            {
+                _session.State.Bookmarks.Add(editor.Entry);
+                successMessage = "已保存到收藏夹";
+            }
+            else
+            {
+                var index = _session.State.Bookmarks.IndexOf(existing);
+                if (index >= 0)
+                {
+                    _session.State.Bookmarks[index] = editor.Entry;
+                }
+                successMessage = "收藏已更新";
+            }
+        }
+        else
+        {
+            return;
+        }
+
+        try
+        {
+            // Favorites are user data, so persist immediately rather than
+            // waiting for the browser to close successfully.
+            await _session.SaveAsync();
+            StatusText.Text = successMessage;
+            UpdateBookmarkUi();
+        }
+        catch (Exception ex)
+        {
+            _session.State.Bookmarks = previousBookmarks;
+            UpdateBookmarkUi();
+            MessageBox.Show(
+                $"无法保存收藏：{ex.Message}",
+                "收藏失败",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private BookmarkEntry? FindBookmark(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        return _session.State.Bookmarks.FirstOrDefault(
+            bookmark => string.Equals(
+                bookmark.Url.TrimEnd('/'),
+                url.TrimEnd('/'),
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UpdateBookmarkUi()
+    {
+        var bookmarked = FindBookmark(CurrentTab?.Address) is not null;
+        BookmarkGlyph.Text = bookmarked ? "\uE735" : "\uE734";
+        BookmarkButton.ToolTip = bookmarked
+            ? "编辑或取消收藏 (Ctrl+D)"
+            : "收藏当前页 (Ctrl+D)";
+        BookmarkButton.SetResourceReference(
+            ForegroundProperty,
+            bookmarked ? "AccentBrush" : "TextBrush");
     }
 
     private void DataCenter_Click(object sender, RoutedEventArgs e) =>
@@ -501,10 +621,38 @@ public partial class BrowserWindow : Window
             return;
         }
 
+        var previousTrackingProtection =
+            _session.State.Preferences.TrackingProtectionEnabled;
+        var previousThirdPartyCookies =
+            _session.State.Preferences.BlockThirdPartyCookies;
+        var previousWebRtcProtection =
+            _session.State.Preferences.WebRtcLeakProtection;
         var window = new SecuritySettingsWindow(_session) { Owner = this };
-        if (window.ShowDialog() == true && _session.HasMasterPassword)
+        if (window.ShowDialog() == true)
         {
-            LockButton.ToolTip = "立即锁定并加密退出";
+            ThemeManager.Apply(_session.State.Preferences.Theme);
+            ApplyThemeLayout();
+            if (previousTrackingProtection !=
+                _session.State.Preferences.TrackingProtectionEnabled)
+            {
+                foreach (var tab in _tabs.Values)
+                {
+                    tab.SetTrackingProtection(
+                        _session.State.Preferences.TrackingProtectionEnabled);
+                }
+            }
+
+            if (previousThirdPartyCookies !=
+                    _session.State.Preferences.BlockThirdPartyCookies ||
+                previousWebRtcProtection !=
+                    _session.State.Preferences.WebRtcLeakProtection)
+            {
+                StatusText.Text = "Cookie 或 WebRTC 防护将在重启浏览器后完全生效";
+            }
+            if (_session.HasMasterPassword)
+            {
+                LockButton.ToolTip = "立即锁定并加密退出";
+            }
         }
     }
 
@@ -537,6 +685,8 @@ public partial class BrowserWindow : Window
         reopen.Click += (_, _) => ReopenClosedTab();
         var history = new MenuItem { Header = "历史记录 (Ctrl+H)" };
         history.Click += (_, _) => OpenDataCenter(LockArea.History);
+        var bookmarks = new MenuItem { Header = "书签收藏 (Ctrl+Shift+O)" };
+        bookmarks.Click += (_, _) => OpenDataCenter(LockArea.Bookmarks);
         var downloads = new MenuItem { Header = "下载记录 (Ctrl+J)" };
         downloads.Click += (_, _) => OpenDataCenter(LockArea.Downloads);
         var print = new MenuItem { Header = "打印… (Ctrl+P)" };
@@ -580,6 +730,7 @@ public partial class BrowserWindow : Window
         menu.Items.Add(reopen);
         menu.Items.Add(new Separator());
         menu.Items.Add(history);
+        menu.Items.Add(bookmarks);
         menu.Items.Add(downloads);
         menu.Items.Add(new Separator());
         menu.Items.Add(print);
@@ -648,6 +799,23 @@ public partial class BrowserWindow : Window
             AddTab();
             e.Handled = true;
         }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.N)
+        {
+            AddTab();
+            e.Handled = true;
+        }
+        else if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) &&
+                 e.Key == Key.Delete)
+        {
+            OpenDataCenter(LockArea.CookiesAndSiteData);
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control &&
+                 TryGetTabNumber(e.Key, out var tabNumber))
+        {
+            SelectTabByNumber(tabNumber);
+            e.Handled = true;
+        }
         else if (modifiers == ModifierKeys.Control && e.Key == Key.W)
         {
             if (CurrentTab is { } tab)
@@ -675,6 +843,12 @@ public partial class BrowserWindow : Window
         else if (modifiers == ModifierKeys.Control && e.Key == Key.D)
         {
             Bookmark_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) &&
+                 e.Key == Key.O)
+        {
+            OpenDataCenter(LockArea.Bookmarks);
             e.Handled = true;
         }
         else if (modifiers == ModifierKeys.Control && e.Key == Key.H)
@@ -758,6 +932,30 @@ public partial class BrowserWindow : Window
         Tabs.SelectedIndex = (currentIndex + offset + Tabs.Items.Count) % Tabs.Items.Count;
     }
 
+    private void SelectTabByNumber(int tabNumber)
+    {
+        if (Tabs.Items.Count == 0)
+        {
+            return;
+        }
+
+        var index = tabNumber == 9
+            ? Tabs.Items.Count - 1
+            : Math.Min(tabNumber - 1, Tabs.Items.Count - 1);
+        Tabs.SelectedIndex = index;
+    }
+
+    private static bool TryGetTabNumber(Key key, out int number)
+    {
+        number = key switch
+        {
+            >= Key.D1 and <= Key.D9 => (int)key - (int)Key.D0,
+            >= Key.NumPad1 and <= Key.NumPad9 => (int)key - (int)Key.NumPad0,
+            _ => 0
+        };
+        return number != 0;
+    }
+
     private async void ShowFind()
     {
         var query = Microsoft.VisualBasic.Interaction.InputBox(
@@ -780,23 +978,268 @@ public partial class BrowserWindow : Window
         TopChrome.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
         NavigationChrome.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
         StatusChrome.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        TopTabsRow.Height = fullscreen ? new GridLength(0) : new GridLength(46);
-        NavigationRow.Height = fullscreen ? new GridLength(0) : new GridLength(56);
-        StatusRow.Height = fullscreen ? new GridLength(0) : new GridLength(26);
+        WindowControlPanel.Visibility =
+            fullscreen ? Visibility.Collapsed : Visibility.Visible;
 
         if (fullscreen)
         {
+            BorderThickness = new Thickness(0);
+            TopTabsRow.Height = new GridLength(0);
+            NavigationRow.Height = new GridLength(0);
+            StatusRow.Height = new GridLength(0);
+            SidebarColumn.Width = new GridLength(0);
+            Grid.SetColumn(BrowserSurface, 0);
+            Grid.SetColumnSpan(BrowserSurface, 2);
+            Grid.SetRow(BrowserSurface, 2);
+            Grid.SetRowSpan(BrowserSurface, 1);
             _previousWindowStyle = WindowStyle;
             _previousWindowState = WindowState;
+            _previousTopmost = Topmost;
+            _previousResizeMode = ResizeMode;
+            _previousWindowBounds = RestoreBounds;
+
+            // A WebView video fullscreen request must use the complete monitor,
+            // not the taskbar work area used by ordinary maximized windows.
+            // Use a normal borderless window at the exact monitor rectangle:
+            // Windows otherwise keeps the taskbar above maximized WPF windows.
+            WindowState = WindowState.Normal;
             WindowStyle = WindowStyle.None;
-            WindowState = WindowState.Maximized;
+            ResizeMode = ResizeMode.NoResize;
+            Topmost = true;
+            Activate();
+            WindowWorkAreaHelper.ApplyFullscreenBounds(
+                new WindowInteropHelper(this).Handle);
         }
         else
         {
+            BorderThickness = new Thickness(1);
+            ApplyThemeLayout();
+            WindowState = WindowState.Normal;
+            Topmost = _previousTopmost;
             WindowStyle = _previousWindowStyle;
+            ResizeMode = _previousResizeMode;
+            Left = _previousWindowBounds.Left;
+            Top = _previousWindowBounds.Top;
+            Width = _previousWindowBounds.Width;
+            Height = _previousWindowBounds.Height;
             WindowState = _previousWindowState;
         }
     }
+
+    private void ApplyThemeLayout()
+    {
+        var vertical = _session.State.Preferences.Theme == BrowserTheme.GraphiteFocus;
+        SidebarColumn.Width = vertical
+            ? new GridLength(230)
+            : new GridLength(0);
+        ContentColumn.Width = new GridLength(1, GridUnitType.Star);
+
+        if (vertical)
+        {
+            TopTabsRow.Height = new GridLength(56);
+            NavigationRow.Height = new GridLength(0);
+            StatusRow.Height = new GridLength(26);
+
+            Grid.SetColumn(TopChrome, 0);
+            Grid.SetColumnSpan(TopChrome, 1);
+            Grid.SetRow(TopChrome, 0);
+            Grid.SetRowSpan(TopChrome, 4);
+            TopChrome.BorderThickness = new Thickness(0, 0, 1, 0);
+
+            BrandColumn.Width = new GridLength(1, GridUnitType.Star);
+            TabsColumn.Width = new GridLength(0);
+            NewTabColumn.Width = new GridLength(0);
+            WindowControlsSpacerColumn.Width = new GridLength(0);
+            BrandRow.Height = new GridLength(58);
+            TabsRow.Height = new GridLength(1, GridUnitType.Star);
+            NewTabRow.Height = new GridLength(54);
+
+            Grid.SetColumn(BrandPanel, 0);
+            Grid.SetRow(BrandPanel, 0);
+            BrandPanel.Margin = new Thickness(15, 0, 8, 0);
+            Grid.SetColumn(Tabs, 0);
+            Grid.SetRow(Tabs, 1);
+            Tabs.TabStripPlacement = Dock.Left;
+            Tabs.Template = (ControlTemplate)FindResource("VerticalBrowserTabsTemplate");
+            Tabs.ItemContainerStyle = GetTabItemStyle();
+            Grid.SetColumn(NewTabButton, 0);
+            Grid.SetRow(NewTabButton, 2);
+            NewTabButton.Width = double.NaN;
+            NewTabButton.Height = 38;
+            NewTabButton.Margin = new Thickness(10, 6, 10, 10);
+
+            Grid.SetColumn(NavigationChrome, 1);
+            Grid.SetColumnSpan(NavigationChrome, 1);
+            Grid.SetRow(NavigationChrome, 0);
+            Grid.SetRowSpan(NavigationChrome, 1);
+            NavigationChrome.Padding = new Thickness(0, 0, 138, 0);
+            Grid.SetColumn(BrowserSurface, 1);
+            Grid.SetColumnSpan(BrowserSurface, 1);
+            Grid.SetRow(BrowserSurface, 1);
+            Grid.SetRowSpan(BrowserSurface, 2);
+            Grid.SetColumn(StatusChrome, 1);
+            Grid.SetColumnSpan(StatusChrome, 1);
+            Grid.SetRow(StatusChrome, 3);
+        }
+        else
+        {
+            TopTabsRow.Height = new GridLength(46);
+            NavigationRow.Height = new GridLength(56);
+            StatusRow.Height = new GridLength(26);
+
+            Grid.SetColumn(TopChrome, 0);
+            Grid.SetColumnSpan(TopChrome, 2);
+            Grid.SetRow(TopChrome, 0);
+            Grid.SetRowSpan(TopChrome, 1);
+            TopChrome.BorderThickness = new Thickness(0, 0, 0, 1);
+
+            BrandColumn.Width = new GridLength(116);
+            TabsColumn.Width = new GridLength(1, GridUnitType.Star);
+            NewTabColumn.Width = GridLength.Auto;
+            WindowControlsSpacerColumn.Width = new GridLength(138);
+            BrandRow.Height = new GridLength(1, GridUnitType.Star);
+            TabsRow.Height = new GridLength(0);
+            NewTabRow.Height = new GridLength(0);
+
+            Grid.SetColumn(BrandPanel, 0);
+            Grid.SetRow(BrandPanel, 0);
+            BrandPanel.Margin = new Thickness(15, 0, 8, 0);
+            Grid.SetColumn(Tabs, 1);
+            Grid.SetRow(Tabs, 0);
+            Tabs.TabStripPlacement = Dock.Top;
+            Tabs.Template = (ControlTemplate)FindResource("HorizontalBrowserTabsTemplate");
+            Tabs.ItemContainerStyle = GetTabItemStyle();
+            Grid.SetColumn(NewTabButton, 2);
+            Grid.SetRow(NewTabButton, 0);
+            NewTabButton.Width = 38;
+            NewTabButton.Height = 38;
+            NewTabButton.Margin = new Thickness(6, 3, 10, 3);
+
+            Grid.SetColumn(NavigationChrome, 0);
+            Grid.SetColumnSpan(NavigationChrome, 2);
+            Grid.SetRow(NavigationChrome, 1);
+            Grid.SetRowSpan(NavigationChrome, 1);
+            NavigationChrome.Padding = new Thickness(0);
+            Grid.SetColumn(BrowserSurface, 0);
+            Grid.SetColumnSpan(BrowserSurface, 2);
+            Grid.SetRow(BrowserSurface, 2);
+            Grid.SetRowSpan(BrowserSurface, 1);
+            Grid.SetColumn(StatusChrome, 0);
+            Grid.SetColumnSpan(StatusChrome, 2);
+            Grid.SetRow(StatusChrome, 3);
+        }
+
+        var tabItemStyle = GetTabItemStyle();
+        foreach (var tabItem in _tabs.Keys)
+        {
+            // Explicit TabItem instances do not automatically inherit
+            // TabControl.ItemContainerStyle, so update every open tab.
+            tabItem.Style = tabItemStyle;
+        }
+    }
+
+    private Style GetTabItemStyle() =>
+        (Style)FindResource(
+            _session.State.Preferences.Theme == BrowserTheme.GraphiteFocus
+                ? "VerticalBrowserTabItemStyle"
+                : "BrowserTabItemStyle");
+
+    private void MinimizeWindow_Click(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState.Minimized;
+
+    private void MaximizeRestoreWindow_Click(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void TopChrome_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left ||
+            _isFullscreen ||
+            IsInsideButton(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+        e.Handled = true;
+    }
+
+    private static bool IsInsideButton(DependencyObject? element)
+    {
+        while (element is not null)
+        {
+            if (element is Button)
+            {
+                return true;
+            }
+
+            element = element is Visual
+                ? VisualTreeHelper.GetParent(element)
+                : LogicalTreeHelper.GetParent(element);
+        }
+
+        return false;
+    }
+
+    private void Window_SourceInitialized(object? sender, EventArgs e)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        _windowSource = HwndSource.FromHwnd(handle);
+        _windowSource?.AddHook(WindowMessageHook);
+    }
+
+    private nint WindowMessageHook(
+        nint windowHandle,
+        int message,
+        nint wordParameter,
+        nint longParameter,
+        ref bool handled)
+    {
+        if (message == WmGetMinMaxInfo)
+        {
+            WindowWorkAreaHelper.ApplyToMinMaxInfo(
+                windowHandle,
+                longParameter,
+                useWorkArea: !_isFullscreen);
+            handled = true;
+        }
+
+        return nint.Zero;
+    }
+
+    private void Window_StateChanged(object? sender, EventArgs e)
+    {
+        if (!IsInitialized)
+        {
+            return;
+        }
+
+        var maximized = WindowState == WindowState.Maximized;
+        if (!_isFullscreen)
+        {
+            BorderThickness = maximized
+                ? new Thickness(0)
+                : new Thickness(1);
+        }
+        MaximizeRestoreGlyph.Text = maximized ? "\uE923" : "\uE922";
+        MaximizeRestoreButton.ToolTip = maximized ? "还原" : "最大化";
+    }
+
+    private static string GetThemeQueryValue(BrowserTheme theme) => theme switch
+    {
+        BrowserTheme.PorcelainDaylight => "daylight",
+        BrowserTheme.GraphiteFocus => "graphite",
+        _ => "midnight"
+    };
+
+    private string GetNewTabAddress() =>
+        "https://veil.local/index.html?theme=" +
+        GetThemeQueryValue(_session.State.Preferences.Theme);
 
     private async void AutoLockTimer_Tick(object? sender, EventArgs e)
     {
@@ -851,10 +1294,11 @@ public partial class BrowserWindow : Window
         {
             if (!_emergencyExit)
             {
-                _session.State.LastSessionUrls = _tabs.Values
+                _shutdownSessionUrls = _tabs.Values
                     .Select(x => x.Address)
                     .Where(x => !string.IsNullOrWhiteSpace(x))
                     .ToList();
+                _session.State.LastSessionUrls = _shutdownSessionUrls.ToList();
 
                 if (_clearSiteDataOnExit && _tabs.Values.FirstOrDefault() is { } siteDataTab)
                 {
@@ -903,6 +1347,25 @@ public partial class BrowserWindow : Window
         }
         catch (Exception ex)
         {
+            // Keep the process alive when persistence/encryption fails. Closing
+            // here would leave the user with a false sense of secure exit and
+            // could strand the only recoverable copy in the working profile.
+            _shutdownStarted = false;
+            BrowserHost.Visibility = Visibility.Visible;
+            ClosingOverlay.Visibility = Visibility.Collapsed;
+            IsEnabled = true;
+            _autoLockTimer.Start();
+            if (!_emergencyExit)
+            {
+                var reopenUrls = _shutdownSessionUrls is { Count: > 0 }
+                    ? _shutdownSessionUrls.ToList()
+                    : [_session.State.Preferences.HomePage];
+                _shutdownSessionUrls = null;
+                foreach (var url in reopenUrls.Take(12))
+                {
+                    AddTab(url);
+                }
+            }
             MessageBox.Show(
                 _emergencyExit
                     ? $"未能完全清除本地数据：{ex.Message}\n\n请关闭浏览器后运行 Clean-Local-Data.ps1。"
@@ -910,31 +1373,30 @@ public partial class BrowserWindow : Window
                 _emergencyExit ? "清理未完成" : "加密失败",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+            return;
         }
-        finally
+
+        _allowClose = true;
+        if (_uninstallerToLaunch is not null)
         {
-            _allowClose = true;
-            if (_uninstallerToLaunch is not null)
+            try
             {
-                try
+                Process.Start(new ProcessStartInfo
                 {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = _uninstallerToLaunch,
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(
-                        $"无法打开卸载程序：{ex.Message}",
-                        "卸载失败",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
-                }
+                    FileName = _uninstallerToLaunch,
+                    UseShellExecute = true
+                });
             }
-            Close();
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"无法打开卸载程序：{ex.Message}",
+                    "卸载失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
         }
+        Close();
     }
 
     private static async Task WaitForWebViewProcessesToExitAsync(
@@ -968,10 +1430,14 @@ public partial class BrowserWindow : Window
     {
         var value = input.Trim();
         if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-            uri.Scheme is "http" or "https" or "file" or "about" or "edge" or
-                "view-source" or "data" or "chrome-extension")
+            uri.Scheme is "http" or "https" or "view-source" or "chrome-extension")
         {
             return uri.AbsoluteUri;
+        }
+
+        if (string.Equals(value, "about:blank", StringComparison.OrdinalIgnoreCase))
+        {
+            return value;
         }
 
         if (!value.Contains(' ') && value.Contains('.'))
@@ -988,6 +1454,31 @@ public partial class BrowserWindow : Window
         }
 
         return "https://www.bing.com/search?q=" + Uri.EscapeDataString(value);
+    }
+
+    private bool RequestSitePermission(
+        string uri,
+        CoreWebView2PermissionKind permissionKind)
+    {
+        var host = Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
+            ? parsed.Host
+            : uri;
+        var label = permissionKind switch
+        {
+            CoreWebView2PermissionKind.Microphone => "麦克风",
+            CoreWebView2PermissionKind.Camera => "摄像头",
+            CoreWebView2PermissionKind.Geolocation => "位置",
+            CoreWebView2PermissionKind.Notifications => "通知",
+            CoreWebView2PermissionKind.ClipboardRead => "读取剪贴板",
+            CoreWebView2PermissionKind.MultipleAutomaticDownloads => "连续下载文件",
+            _ => permissionKind.ToString()
+        };
+
+        return MessageBox.Show(
+            $"网站 {host} 请求使用“{label}”权限。\n\n是否允许本次请求？",
+            "网站权限请求",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
     private async Task DeleteAllLocalDataAsync()
@@ -1024,5 +1515,16 @@ public partial class BrowserWindow : Window
         }
 
         throw new IOException($"无法删除本地数据目录“{path}”。", lastError);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (_windowSource is not null)
+        {
+            _windowSource.RemoveHook(WindowMessageHook);
+            _windowSource = null;
+        }
+
+        base.OnClosed(e);
     }
 }

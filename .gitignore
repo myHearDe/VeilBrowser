@@ -23,6 +23,7 @@ third_party/AdGuardBrowserExtension-source-*.zip
 .env
 .env.*
 !.env.example
+signing.local.ps1
 
 # OS/editor noise
 .DS_Store

@@ -2,13 +2,17 @@ namespace VeilBrowser.Core.Models;
 
 public sealed class SecurityPreferences
 {
+    public const string DefaultHomePage =
+        "https://veil.local/index.html?theme=midnight";
+
     public bool StartupLock { get; set; } = true;
     public int AutoLockMinutes { get; set; } = 10;
     public bool ClearCacheOnExit { get; set; }
     public bool BlockThirdPartyCookies { get; set; } = true;
     public bool TrackingProtectionEnabled { get; set; } = true;
     public bool WebRtcLeakProtection { get; set; } = true;
-    public string HomePage { get; set; } = "https://www.bing.com";
+    public string HomePage { get; set; } = DefaultHomePage;
+    public BrowserTheme Theme { get; set; } = BrowserTheme.MidnightEmerald;
     public Dictionary<LockArea, bool> AreaLocks { get; set; } = StandardLocks();
 
     public bool IsLocked(LockArea area) =>

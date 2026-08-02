@@ -19,7 +19,7 @@
         </Grid.Background>
         <Border Margin="28" Padding="26"
                 Background="#E6111B2E"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 CornerRadius="20">
         <Grid>
         <Grid.RowDefinitions>
@@ -31,17 +31,17 @@
         <StackPanel>
             <Border Width="48" Height="48" CornerRadius="15" Background="#173A38"
                     HorizontalAlignment="Left" Margin="0,0,0,16">
-                <TextBlock Text="◆" Foreground="{StaticResource AccentBrush}"
+                <TextBlock Text="◆" Foreground="{DynamicResource AccentBrush}"
                            FontSize="18" HorizontalAlignment="Center"
                            VerticalAlignment="Center" />
             </Border>
-            <TextBlock Text="VEIL / 隐栈浏览器" Foreground="{StaticResource AccentBrush}"
+            <TextBlock Text="VEIL / 隐栈浏览器" Foreground="{DynamicResource AccentBrush}"
                        FontSize="13" FontWeight="Bold" />
             <TextBlock x:Name="HeroTitleText" Text="欢迎回来"
                        FontSize="31" FontWeight="SemiBold"
                        Margin="0,5,0,8" />
             <TextBlock Text="浏览数据在关闭后进入加密容器。密码不会上传。"
-                       Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
+                       Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" />
         </StackPanel>
 
         <ScrollViewer Grid.Row="1"
@@ -53,7 +53,7 @@
                 <StackPanel x:Name="SetupPanel" Visibility="Collapsed">
                     <TextBlock Text="首次安全设置" FontSize="18" FontWeight="SemiBold"
                                Margin="0,0,0,12" />
-                    <Border Background="{StaticResource SurfaceBrush}" Padding="16" Margin="0,0,0,12">
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="16" Margin="0,0,0,12">
                         <StackPanel>
                             <RadioButton x:Name="PasswordModeRadio" IsChecked="True"
                                          Content="使用主密码（推荐，可给每个区域单独上锁）"
@@ -76,7 +76,7 @@
                 <StackPanel x:Name="UnlockPanel" Visibility="Collapsed">
                     <TextBlock Text="浏览器已锁定" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock Text="输入主密码解密本地资料和 WebView2 配置。"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}"
                                TextWrapping="Wrap"
                                Margin="0,8,0,18" />
                     <PasswordBox x:Name="UnlockPasswordBox" MinHeight="36"
@@ -87,7 +87,7 @@
                             VerticalAlignment="Center" Visibility="Collapsed">
                     <ProgressBar IsIndeterminate="True" Width="250" Height="5" />
                     <TextBlock x:Name="BusyText" Text="正在安全解锁…"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}"
                                HorizontalAlignment="Center" Margin="0,14,0,0" />
                 </StackPanel>
             </Grid>
@@ -99,7 +99,7 @@
             <Button x:Name="PrimaryButton" Style="{StaticResource PrimaryButton}"
                     Content="继续" Height="44" Click="PrimaryButton_Click" />
             <TextBlock Text="忘记主密码且没有备份时，加密数据无法恢复。"
-                       Foreground="{StaticResource MutedTextBrush}"
+                       Foreground="{DynamicResource MutedTextBrush}"
                        FontSize="12" HorizontalAlignment="Center" Margin="0,10,0,0" />
         </StackPanel>
         </Grid>

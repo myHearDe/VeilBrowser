@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>新标签页</title>
+    <link rel="stylesheet" href="newtab.css">
+</head>
+<body>
+    <main>
+        <section class="intro">
+            <div class="brand">
+                <div class="brand-mark">V</div>
+                <div><strong>VEIL</strong><span>隐栈浏览器</span></div>
+            </div>
+            <p id="greeting">安心浏览，从一个干净的新标签页开始。</p>
+
+            <form id="searchForm" role="search">
+                <span aria-hidden="true">⌕</span>
+                <input id="searchInput" autocomplete="off"
+                       placeholder="搜索或输入网址"
+                       aria-label="搜索或输入网址">
+                <kbd>Enter</kbd>
+            </form>
+        </section>
+
+        <section class="protection" aria-label="隐私状态">
+            <div>
+                <span class="icon shield">✓</span>
+                <p><strong>保护已开启</strong><small>WebView2 跟踪防护与 AdGuard</small></p>
+            </div>
+            <div>
+                <span class="icon">◇</span>
+                <p><strong>本地加密</strong><small>关闭后进入加密容器</small></p>
+            </div>
+            <div>
+                <span class="icon">↗</span>
+                <p><strong>HTTPS 优先</strong><small>自动升级安全连接</small></p>
+            </div>
+        </section>
+
+        <section class="shortcuts">
+            <header><h2>常用网站</h2><span>快速开始</span></header>
+            <div class="shortcut-grid">
+                <a href="https://github.com"><b>GH</b><span>GitHub</span><small>github.com</small></a>
+                <a href="https://www.wikipedia.org"><b>W</b><span>维基百科</span><small>wikipedia.org</small></a>
+                <a href="https://www.bing.com"><b>B</b><span>Bing</span><small>bing.com</small></a>
+                <a href="https://www.zhihu.com"><b>知</b><span>知乎</span><small>zhihu.com</small></a>
+                <a href="https://www.bilibili.com"><b>哔</b><span>哔哩哔哩</span><small>bilibili.com</small></a>
+                <button id="focusAddress" type="button"><b>＋</b><span>输入网站</span><small>聚焦地址栏</small></button>
+            </div>
+        </section>
+
+        <section class="notice">
+            <span class="status-dot"></span>
+            <p><strong>隐私优先</strong><small>浏览记录、书签和设置只保存在本机。</small></p>
+            <span class="runtime">Evergreen WebView2</span>
+        </section>
+    </main>
+    <script src="newtab.js"></script>
+</body>
+</html>

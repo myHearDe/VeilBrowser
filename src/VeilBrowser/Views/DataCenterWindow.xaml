@@ -12,8 +12,8 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Border Background="{StaticResource ChromeBrush}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+        <Border Background="{DynamicResource ChromeBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <Grid Margin="16">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -22,15 +22,16 @@
                 </Grid.RowDefinitions>
                 <StackPanel Margin="8,10,8,22">
                     <StackPanel Orientation="Horizontal">
-                        <Border Width="34" Height="34" CornerRadius="10" Background="#173A38">
-                            <TextBlock Text="◆" Foreground="{StaticResource AccentBrush}"
+                        <Border Width="34" Height="34" CornerRadius="10"
+                                Background="{DynamicResource ProtectionSurfaceBrush}">
+                            <TextBlock Text="◆" Foreground="{DynamicResource AccentBrush}"
                                        FontSize="13" HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
                         </Border>
                         <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="隐私资料" FontSize="19" FontWeight="SemiBold" />
                             <TextBlock Text="LOCAL VAULT" FontSize="10" FontWeight="Bold"
-                                       Foreground="{StaticResource AccentBrush}" />
+                                       Foreground="{DynamicResource AccentBrush}" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
@@ -52,12 +53,14 @@
                             Style="{StaticResource SideNavButton}" />
                 </StackPanel>
 
-                <Border Grid.Row="2" Background="#101D31" CornerRadius="10" Padding="12">
+                <Border Grid.Row="2" Background="{DynamicResource SurfaceAltBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="10" Padding="12">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}"
+                        <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}"
                                  Margin="0,2,8,0" VerticalAlignment="Top" />
                         <TextBlock Text="关闭浏览器后，资料会进入 AES-256-GCM 加密容器。"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    FontSize="11" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
@@ -80,18 +83,21 @@
                     <TextBlock x:Name="SectionTitle" Text="浏览历史"
                                FontSize="27" FontWeight="SemiBold" />
                     <TextBlock x:Name="SectionHint"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}"
                                Margin="0,5,0,0" />
                 </StackPanel>
-                <Border Grid.Column="1" Background="#173A38" CornerRadius="12"
+                <Border Grid.Column="1"
+                        Background="{DynamicResource ProtectionSurfaceBrush}"
+                        BorderBrush="{DynamicResource ProtectionBorderBrush}"
+                        BorderThickness="1" CornerRadius="12"
                         Padding="12,7" VerticalAlignment="Center">
-                    <TextBlock Text="本地加密" Foreground="{StaticResource AccentBrush}"
+                    <TextBlock Text="本地加密" Foreground="{DynamicResource AccentBrush}"
                                FontSize="12" FontWeight="SemiBold" />
                 </Border>
             </Grid>
 
-            <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}"
-                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+            <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     CornerRadius="12" Padding="7" Margin="0,18,0,12">
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="AddButton" Content="＋ 新增" Click="Add_Click" />
@@ -103,8 +109,8 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Row="2" Background="{StaticResource SurfaceAltBrush}"
-                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+            <Border Grid.Row="2" Background="{DynamicResource SurfaceAltBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     CornerRadius="12" ClipToBounds="True">
                 <ListView x:Name="DataList" Background="Transparent"
                           BorderThickness="0" SelectionMode="Single"
@@ -124,7 +130,7 @@
 
             <TextBlock Grid.Row="3"
                        Text="区域锁用于控制浏览器解锁后的再次验证；磁盘资料始终加密保存。"
-                       Foreground="{StaticResource MutedTextBrush}"
+                       Foreground="{DynamicResource MutedTextBrush}"
                        TextWrapping="Wrap" Margin="2,13,0,0" FontSize="12" />
         </Grid>
     </Grid>

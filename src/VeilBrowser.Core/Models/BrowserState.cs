@@ -24,6 +24,8 @@ public sealed class DownloadEntry
     public long TotalBytes { get; set; }
     public bool IsComplete { get; set; }
     public bool IsCancelled { get; set; }
+    public bool IsInterrupted { get; set; }
+    public string InterruptReason { get; set; } = string.Empty;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
 }
 

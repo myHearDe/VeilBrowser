@@ -13,11 +13,13 @@ public sealed class EncryptedJsonStore<T> where T : class, new()
     };
 
     private readonly string _path;
+    private readonly string? _keyContext;
 
-    public EncryptedJsonStore(string path)
+    public EncryptedJsonStore(string path, string? keyContext = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _path = path;
+        _keyContext = keyContext;
     }
 
     public async Task<T> LoadAsync(
@@ -31,9 +33,27 @@ public sealed class EncryptedJsonStore<T> where T : class, new()
 
         var envelope = await File.ReadAllBytesAsync(_path, cancellationToken).ConfigureAwait(false);
         byte[]? plaintext = null;
+        byte[]? derivedKey = null;
         try
         {
-            plaintext = AesGcmEnvelope.Decrypt(envelope, key.Span);
+            if (_keyContext is null)
+            {
+                plaintext = AesGcmEnvelope.Decrypt(envelope, key.Span);
+            }
+            else
+            {
+                derivedKey = DataProtectionKeys.Derive(key.Span, _keyContext);
+                try
+                {
+                    plaintext = AesGcmEnvelope.Decrypt(envelope, derivedKey);
+                }
+                catch (CryptographicException)
+                {
+                    // Compatibility path for profiles written before subkey
+                    // separation. The next save transparently migrates them.
+                    plaintext = AesGcmEnvelope.Decrypt(envelope, key.Span);
+                }
+            }
             return JsonSerializer.Deserialize<T>(plaintext, JsonOptions) ?? new T();
         }
         finally
@@ -41,6 +61,10 @@ public sealed class EncryptedJsonStore<T> where T : class, new()
             if (plaintext is not null)
             {
                 CryptographicOperations.ZeroMemory(plaintext);
+            }
+            if (derivedKey is not null)
+            {
+                CryptographicOperations.ZeroMemory(derivedKey);
             }
             CryptographicOperations.ZeroMemory(envelope);
         }
@@ -59,17 +83,38 @@ public sealed class EncryptedJsonStore<T> where T : class, new()
         }
 
         var plaintext = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions);
-        var envelope = AesGcmEnvelope.Encrypt(plaintext, key.Span);
+        byte[]? derivedKey = null;
+        var encryptionKey = key.Span;
+        if (_keyContext is not null)
+        {
+            derivedKey = DataProtectionKeys.Derive(key.Span, _keyContext);
+            encryptionKey = derivedKey;
+        }
+        var envelope = AesGcmEnvelope.Encrypt(plaintext, encryptionKey);
         var temporaryPath = _path + ".new";
         try
         {
-            await File.WriteAllBytesAsync(temporaryPath, envelope, cancellationToken).ConfigureAwait(false);
+            await using (var stream = new FileStream(
+                temporaryPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                64 * 1024,
+                FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await stream.WriteAsync(envelope, cancellationToken).ConfigureAwait(false);
+                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
             File.Move(temporaryPath, _path, overwrite: true);
         }
         finally
         {
             CryptographicOperations.ZeroMemory(plaintext);
             CryptographicOperations.ZeroMemory(envelope);
+            if (derivedKey is not null)
+            {
+                CryptographicOperations.ZeroMemory(derivedKey);
+            }
             if (File.Exists(temporaryPath))
             {
                 File.Delete(temporaryPath);

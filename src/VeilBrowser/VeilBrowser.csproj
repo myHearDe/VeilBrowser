@@ -13,13 +13,17 @@
     <AssemblyTitle>VeilBrowser 隐栈浏览器</AssemblyTitle>
     <Product>VeilBrowser</Product>
     <Description>本地加密、可分区上锁的 Edge WebView2 隐私浏览器</Description>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\VeilBrowser.Core\VeilBrowser.Core.csproj" />
     <PackageReference Include="Microsoft.Web.WebView2" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Assets\NewTab\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
     <Content Include="..\..\third_party\AdGuardBrowserExtension\**\*">
       <Link>Extensions\AdGuard\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

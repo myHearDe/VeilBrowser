@@ -2,7 +2,7 @@ namespace VeilBrowser.Security;
 
 public sealed class SecurityMetadata
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
     public KeyProtectionMode Mode { get; set; }
     public bool StartupLock { get; set; } = true;
     public string SaltBase64 { get; set; } = string.Empty;

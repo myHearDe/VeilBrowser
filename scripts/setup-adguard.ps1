@@ -10,6 +10,7 @@ $thirdPartyRoot = Join-Path $projectRoot "third_party"
 $extensionRoot = Join-Path $thirdPartyRoot "AdGuardBrowserExtension"
 $manifestPath = Join-Path $extensionRoot "manifest.json"
 $sourceArchive = Join-Path $thirdPartyRoot "AdGuardBrowserExtension-source-v5.4.3.1.zip"
+$integrationRoot = Join-Path $thirdPartyRoot "VeilBrowserAdGuardBridge"
 
 $version = "5.4.3.1"
 $extensionUrl = "https://github.com/AdguardTeam/AdguardBrowserExtension/releases/download/v$version/chrome-mv3.zip"
@@ -49,6 +50,52 @@ function Download-VerifiedFile {
     Invoke-WebRequest -Uri $Uri -UseBasicParsing -OutFile $temporary
     Assert-FileHash -Path $temporary -Expected $Sha256
     Move-Item -LiteralPath $temporary -Destination $Destination -Force
+}
+
+function Apply-VeilIntegration {
+    $integrationPages = Join-Path $integrationRoot "pages"
+    $extensionPages = Join-Path $extensionRoot "pages"
+    foreach ($name in @(
+        "veil-control.html",
+        "veil-control.css",
+        "veil-control.js"
+    )) {
+        $source = Join-Path $integrationPages $name
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "VeilBrowser AdGuard integration file is missing: $source"
+        }
+        Copy-Item -LiteralPath $source -Destination $extensionPages -Force
+    }
+
+    $backgroundPath = Join-Path $extensionPages "background.js"
+    $background = [IO.File]::ReadAllText($backgroundPath, [Text.Encoding]::UTF8)
+    if ($background -notmatch "message\.data\?\.tabId") {
+        $pattern =
+            "\*/ static async openAssistant\(\) \{\r?\n" +
+            "\s*const activeTab = await tabs_TabsApi\.getActive\(\);"
+        $replacement = @"
+*/ static async openAssistant(message) {
+        const requestedTabId = message === null || message === void 0 ? void 0 : message.data?.tabId;
+        const activeTab = Number.isInteger(requestedTabId)
+            ? (await tabs_TabsApi.getAll()).find((tab)=>tab.id === requestedTabId)
+            : await tabs_TabsApi.getActive();
+"@
+        $patched = [Text.RegularExpressions.Regex]::Replace(
+            $background,
+            $pattern,
+            $replacement,
+            [Text.RegularExpressions.RegexOptions]::None,
+            [TimeSpan]::FromSeconds(5)
+        )
+        if ($patched -eq $background) {
+            throw "Could not apply the explicit-tab AdGuard assistant integration patch."
+        }
+        [IO.File]::WriteAllText(
+            $backgroundPath,
+            $patched,
+            [Text.UTF8Encoding]::new($false)
+        )
+    }
 }
 
 New-Item -ItemType Directory -Path $thirdPartyRoot -Force | Out-Null
@@ -127,6 +174,8 @@ else {
     Assert-FileHash -Path $licensePath -Expected $licenseSha256
 }
 
+Apply-VeilIntegration
+
 $sourceText = @"
 AdGuard Browser Extension $version
 Source: https://github.com/AdguardTeam/AdguardBrowserExtension/releases/tag/v$version
@@ -136,6 +185,7 @@ License: GNU General Public License v3.0 (see LICENSE)
 The extension is distributed as a separate unpacked browser extension and remains governed by its own license.
 Corresponding source archive: ../AdGuardBrowserExtension-source-v$version.zip
 Source archive SHA256: $sourceSha256
+VeilBrowser integration source: ../VeilBrowserAdGuardBridge/
 "@
 $sourceText | Set-Content -LiteralPath (Join-Path $extensionRoot "SOURCE.txt") -Encoding UTF8
 

@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.IO;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 
@@ -9,9 +10,10 @@ public sealed class BrowserTab : IDisposable
     private readonly CoreWebView2Environment _environment;
     private readonly BrowserDownloadHandler _downloadHandler;
     private readonly BrowserExtensionManager _extensionManager;
-    private readonly bool _trackingProtectionEnabled;
+    private bool _trackingProtectionEnabled;
     private readonly Action<string> _openInNewTab;
     private readonly Action<bool> _fullscreenChanged;
+    private readonly Func<string, CoreWebView2PermissionKind, bool> _requestPermission;
     private bool _initialized;
 
     public BrowserTab(
@@ -20,7 +22,8 @@ public sealed class BrowserTab : IDisposable
         BrowserExtensionManager extensionManager,
         bool trackingProtectionEnabled,
         Action<string> openInNewTab,
-        Action<bool> fullscreenChanged)
+        Action<bool> fullscreenChanged,
+        Func<string, CoreWebView2PermissionKind, bool> requestPermission)
     {
         _environment = environment;
         _downloadHandler = downloadHandler;
@@ -28,6 +31,7 @@ public sealed class BrowserTab : IDisposable
         _trackingProtectionEnabled = trackingProtectionEnabled;
         _openInNewTab = openInNewTab;
         _fullscreenChanged = fullscreenChanged;
+        _requestPermission = requestPermission;
         Browser = new WebView2
         {
             DefaultBackgroundColor = Color.White
@@ -56,7 +60,15 @@ public sealed class BrowserTab : IDisposable
 
         await Browser.EnsureCoreWebView2Async(_environment);
         var core = Browser.CoreWebView2;
-        await _extensionManager.EnsureInstalledAsync(core.Profile);
+        var newTabAssets = Path.Combine(AppContext.BaseDirectory, "Assets", "NewTab");
+        if (Directory.Exists(newTabAssets))
+        {
+            core.SetVirtualHostNameToFolderMapping(
+                "veil.local",
+                newTabAssets,
+                CoreWebView2HostResourceAccessKind.DenyCors);
+        }
+        await _extensionManager.EnsureInstalledAsync(core);
         var settings = core.Settings;
         settings.AreBrowserAcceleratorKeysEnabled = true;
         settings.AreDefaultContextMenusEnabled = true;
@@ -82,16 +94,39 @@ public sealed class BrowserTab : IDisposable
             TitleChanged?.Invoke(this, Title);
         };
         core.SourceChanged += (_, _) => AddressChanged?.Invoke(this, core.Source);
-        core.NavigationStarting += (_, _) => LoadingStateChanged?.Invoke(this, true);
+        core.NavigationStarting += (_, e) =>
+        {
+            if (!IsAllowedNavigation(e.Uri))
+            {
+                e.Cancel = true;
+                StatusMessageChanged?.Invoke(this, $"已拦截不安全或不支持的导航：{e.Uri}");
+                return;
+            }
+
+            LoadingStateChanged?.Invoke(this, true);
+        };
         core.NavigationCompleted += (_, _) => LoadingStateChanged?.Invoke(this, false);
         core.StatusBarTextChanged += (_, _) =>
             StatusMessageChanged?.Invoke(this, core.StatusBarText ?? string.Empty);
+        core.PermissionRequested += (_, e) =>
+        {
+            e.State = _requestPermission(e.Uri, e.PermissionKind)
+                ? CoreWebView2PermissionState.Allow
+                : CoreWebView2PermissionState.Deny;
+        };
+        core.ServerCertificateErrorDetected += (_, e) =>
+        {
+            e.Action = CoreWebView2ServerCertificateErrorAction.Cancel;
+            StatusMessageChanged?.Invoke(
+                this,
+                $"已阻止证书异常页面：{e.RequestUri} ({e.ErrorStatus})");
+        };
         core.NewWindowRequested += (_, e) =>
         {
             e.Handled = true;
-            if (!string.IsNullOrWhiteSpace(e.Uri))
+            if (TryGetSafeExternalUri(e.Uri, out var newWindowUri))
             {
-                _openInNewTab(e.Uri);
+                _openInNewTab(newWindowUri);
             }
         };
         core.ContainsFullScreenElementChanged += (_, _) =>
@@ -152,6 +187,17 @@ public sealed class BrowserTab : IDisposable
 
     public void ResetZoom() => Browser.ZoomFactor = 1.0;
 
+    public void SetTrackingProtection(bool enabled)
+    {
+        _trackingProtectionEnabled = enabled;
+        if (Browser.CoreWebView2 is { } core)
+        {
+            core.Profile.PreferredTrackingPreventionLevel = enabled
+                ? CoreWebView2TrackingPreventionLevel.Strict
+                : CoreWebView2TrackingPreventionLevel.None;
+        }
+    }
+
     public async Task FindAsync(string query)
     {
         if (Browser.CoreWebView2 is not { } core || string.IsNullOrWhiteSpace(query))
@@ -188,6 +234,54 @@ public sealed class BrowserTab : IDisposable
             CoreWebView2ContextMenuItemKind.Command);
         openInTab.CustomItemSelected += (_, _) => _openInNewTab(link);
         e.MenuItems.Insert(0, openInTab);
+    }
+
+    private static bool TryGetSafeExternalUri(string? input, out string uriText)
+    {
+        uriText = string.Empty;
+        if (string.IsNullOrWhiteSpace(input) ||
+            !Uri.TryCreate(input, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https" or "about"))
+        {
+            return false;
+        }
+
+        uriText = uri.AbsoluteUri;
+        return true;
+    }
+
+    private static bool IsAllowedNavigation(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input) ||
+            !Uri.TryCreate(input, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (uri.Scheme is "http" or "https")
+        {
+            return true;
+        }
+
+        if (uri.Scheme == "about" &&
+            string.Equals(input, "about:blank", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (uri.Scheme == "chrome-extension")
+        {
+            return true;
+        }
+
+        if (input.StartsWith("view-source:", StringComparison.OrdinalIgnoreCase) &&
+            Uri.TryCreate(input["view-source:".Length..], UriKind.Absolute, out var sourceUri) &&
+            sourceUri.Scheme is "http" or "https")
+        {
+            return true;
+        }
+
+        return false;
     }
 
     public void Dispose()

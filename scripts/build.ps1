@@ -27,5 +27,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "Core smoke tests failed with exit code $LASTEXITCODE."
 }
 
+dotnet run --project .\tests\VeilBrowser.Ui.SmokeTests\VeilBrowser.Ui.SmokeTests.csproj -c Release --no-build
+if ($LASTEXITCODE -ne 0) {
+    throw "UI theme smoke tests failed with exit code $LASTEXITCODE."
+}
+
 Write-Host ""
-Write-Host "Build and core smoke tests completed successfully." -ForegroundColor Green
+Write-Host "Build and all smoke tests completed successfully." -ForegroundColor Green

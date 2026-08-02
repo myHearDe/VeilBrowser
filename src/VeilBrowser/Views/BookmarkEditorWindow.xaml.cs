@@ -5,12 +5,33 @@ namespace VeilBrowser.Views;
 
 public partial class BookmarkEditorWindow : Window
 {
-    public BookmarkEditorWindow()
+    private readonly BookmarkEntry? _existingEntry;
+
+    public BookmarkEditorWindow(
+        string title = "",
+        string url = "",
+        BookmarkEntry? existingEntry = null)
     {
         InitializeComponent();
+        _existingEntry = existingEntry;
+        TitleBox.Text = existingEntry?.Title ?? title;
+        UrlBox.Text = existingEntry?.Url ?? url;
+        if (existingEntry is not null)
+        {
+            Title = "编辑收藏";
+            HeadingText.Text = "编辑收藏";
+            DeleteButton.Visibility = Visibility.Visible;
+        }
+
+        Loaded += (_, _) =>
+        {
+            TitleBox.Focus();
+            TitleBox.SelectAll();
+        };
     }
 
     public BookmarkEntry? Entry { get; private set; }
+    public bool DeleteRequested { get; private set; }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
@@ -23,10 +44,16 @@ public partial class BookmarkEditorWindow : Window
         }
 
         Entry = new BookmarkEntry(
-            Guid.NewGuid(),
+            _existingEntry?.Id ?? Guid.NewGuid(),
             TitleBox.Text.Trim(),
             uri.AbsoluteUri,
-            DateTimeOffset.Now);
+            _existingEntry?.CreatedAt ?? DateTimeOffset.Now);
+        DialogResult = true;
+    }
+
+    private void Delete_Click(object sender, RoutedEventArgs e)
+    {
+        DeleteRequested = true;
         DialogResult = true;
     }
 }

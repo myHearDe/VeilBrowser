@@ -80,6 +80,10 @@ winget 安装 Inno Setup 6，之后自动复用。
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -InstallCompiler
 ```
 
+正式发布前的 Authenticode 签名流程见 `SIGNING.zh-CN.md`。双击
+`一键打包新版.cmd` 后，脚本会在程序发布完成和安装包生成完成两个位置暂停，
+等待人工签名和 `CONTINUE` 指令；签名或时间戳验证失败时立即停止。
+
 安装完成后，Windows“已安装的应用”和开始菜单里都会出现卸载入口。卸载程序会
 询问是保留加密浏览资料，还是连同 `%LocalAppData%\VeilBrowser` 与临时工作目录
 一起彻底删除。默认选择“保留”，防止误删密码库和书签。

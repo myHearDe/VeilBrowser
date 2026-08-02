@@ -136,7 +136,7 @@ public partial class DataCenterWindow : Window
         };
     }
 
-    private void Add_Click(object sender, RoutedEventArgs e)
+    private async void Add_Click(object sender, RoutedEventArgs e)
     {
         if (_currentArea == LockArea.Passwords)
         {
@@ -145,6 +145,11 @@ public partial class DataCenterWindow : Window
             {
                 _session.State.Credentials.Add(editor.Entry);
                 RefreshRows();
+                if (!await TrySaveAsync("保存密码"))
+                {
+                    _session.State.Credentials.Remove(editor.Entry);
+                    RefreshRows();
+                }
             }
         }
         else if (_currentArea == LockArea.Bookmarks)
@@ -154,6 +159,11 @@ public partial class DataCenterWindow : Window
             {
                 _session.State.Bookmarks.Add(editor.Entry);
                 RefreshRows();
+                if (!await TrySaveAsync("保存收藏"))
+                {
+                    _session.State.Bookmarks.Remove(editor.Entry);
+                    RefreshRows();
+                }
             }
         }
     }
@@ -240,35 +250,31 @@ public partial class DataCenterWindow : Window
         }
     }
 
-    private void Delete_Click(object sender, RoutedEventArgs e)
+    private async void Delete_Click(object sender, RoutedEventArgs e)
     {
         if (DataList.SelectedItem is not DisplayRow row)
         {
             return;
         }
 
-        switch (row.Source)
+        var rollback = row.Source switch
         {
-            case HistoryEntry history:
-                _session.State.History.Remove(history);
-                break;
-            case DownloadEntry download:
-                _session.State.Downloads.Remove(download);
-                break;
-            case BookmarkEntry bookmark:
-                _session.State.Bookmarks.Remove(bookmark);
-                break;
-            case CredentialEntry credential:
-                _session.State.Credentials.Remove(credential);
-                break;
-            case string sessionUrl:
-                _session.State.LastSessionUrls.Remove(sessionUrl);
-                break;
-        }
+            HistoryEntry history => RemoveWithRollback(_session.State.History, history),
+            DownloadEntry download => RemoveWithRollback(_session.State.Downloads, download),
+            BookmarkEntry bookmark => RemoveWithRollback(_session.State.Bookmarks, bookmark),
+            CredentialEntry credential => RemoveWithRollback(_session.State.Credentials, credential),
+            string sessionUrl => RemoveWithRollback(_session.State.LastSessionUrls, sessionUrl),
+            _ => null
+        };
         RefreshRows();
+        if (rollback is not null && !await TrySaveAsync("删除记录"))
+        {
+            rollback();
+            RefreshRows();
+        }
     }
 
-    private void Clear_Click(object sender, RoutedEventArgs e)
+    private async void Clear_Click(object sender, RoutedEventArgs e)
     {
         if (MessageBox.Show(
             $"确定清空“{AreaName(_currentArea)}”吗？此操作无法撤销。",
@@ -279,21 +285,27 @@ public partial class DataCenterWindow : Window
             return;
         }
 
+        Action? rollback = null;
         switch (_currentArea)
         {
             case LockArea.History:
+                rollback = ClearWithRollback(_session.State.History);
                 _session.State.History.Clear();
                 break;
             case LockArea.Downloads:
+                rollback = ClearWithRollback(_session.State.Downloads);
                 _session.State.Downloads.Clear();
                 break;
             case LockArea.Bookmarks:
+                rollback = ClearWithRollback(_session.State.Bookmarks);
                 _session.State.Bookmarks.Clear();
                 break;
             case LockArea.Passwords:
+                rollback = ClearWithRollback(_session.State.Credentials);
                 _session.State.Credentials.Clear();
                 break;
             case LockArea.Sessions:
+                rollback = ClearWithRollback(_session.State.LastSessionUrls);
                 _session.State.LastSessionUrls.Clear();
                 break;
             case LockArea.CookiesAndSiteData:
@@ -303,6 +315,47 @@ public partial class DataCenterWindow : Window
                 break;
         }
         RefreshRows();
+        if (rollback is not null && !await TrySaveAsync("清空数据"))
+        {
+            rollback();
+            RefreshRows();
+        }
+    }
+
+    private async Task<bool> TrySaveAsync(string operation)
+    {
+        try
+        {
+            await _session.SaveAsync();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"{operation}失败：{ex.Message}",
+                "无法保存浏览器数据",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    private static Action? RemoveWithRollback<T>(List<T> items, T item)
+    {
+        var index = items.IndexOf(item);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        items.RemoveAt(index);
+        return () => items.Insert(Math.Min(index, items.Count), item);
+    }
+
+    private static Action ClearWithRollback<T>(List<T> items)
+    {
+        var snapshot = items.ToList();
+        return () => items.AddRange(snapshot);
     }
 
     private static string AreaName(LockArea area) => area switch

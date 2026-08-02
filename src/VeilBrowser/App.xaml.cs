@@ -61,8 +61,15 @@ public partial class App : Application
             await ProfileContainerService.RestoreAsync(
                 paths.EncryptedProfile, paths.WorkingProfile, key);
 
-            var stateStore = new EncryptedJsonStore<BrowserState>(paths.EncryptedState);
+            var stateStore = new EncryptedJsonStore<BrowserState>(
+                paths.EncryptedState,
+                DataProtectionKeys.BrowserStateContext);
             var state = await stateStore.LoadAsync(key);
+            if (IsLegacyDefaultHomePage(state.Preferences.HomePage))
+            {
+                state.Preferences.HomePage = SecurityPreferences.DefaultHomePage;
+            }
+            ThemeManager.Apply(state.Preferences.Theme);
             var metadata = await security.ReadMetadataAsync();
             if (metadata?.Mode == KeyProtectionMode.WindowsAccount)
             {
@@ -144,4 +151,10 @@ public partial class App : Application
             userDataFolder,
             options);
     }
+
+    private static bool IsLegacyDefaultHomePage(string? homePage) =>
+        string.Equals(
+            homePage?.TrimEnd('/'),
+            "https://www.bing.com",
+            StringComparison.OrdinalIgnoreCase);
 }

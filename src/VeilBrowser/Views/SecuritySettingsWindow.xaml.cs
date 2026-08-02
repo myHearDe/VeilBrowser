@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using VeilBrowser.Core.Models;
+using VeilBrowser.Infrastructure;
 using VeilBrowser.Security;
 
 namespace VeilBrowser.Views;
@@ -10,11 +11,13 @@ public partial class SecuritySettingsWindow : Window
 {
     private readonly AppSession _session;
     private SecurityMetadata? _metadata;
+    private BrowserTheme _originalTheme;
 
     public SecuritySettingsWindow(AppSession session)
     {
         InitializeComponent();
         _session = session;
+        _originalTheme = session.State.Preferences.Theme;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -23,6 +26,7 @@ public partial class SecuritySettingsWindow : Window
         {
             _metadata = await _session.Security.ReadMetadataAsync();
             var preferences = _session.State.Preferences;
+            _originalTheme = preferences.Theme;
             StartupLockCheck.IsChecked = _metadata?.StartupLock == true;
             AutoLockBox.Text = preferences.AutoLockMinutes.ToString(CultureInfo.CurrentCulture);
             ThirdPartyCookiesCheck.IsChecked = preferences.BlockThirdPartyCookies;
@@ -30,6 +34,7 @@ public partial class SecuritySettingsWindow : Window
             WebRtcCheck.IsChecked = preferences.WebRtcLeakProtection;
             ClearCacheCheck.IsChecked = preferences.ClearCacheOnExit;
             HomePageBox.Text = preferences.HomePage;
+            SelectTheme(preferences.Theme);
 
             var passwordMode = _metadata?.Mode == KeyProtectionMode.MasterPassword;
             KeyModeText.Text = passwordMode
@@ -77,9 +82,15 @@ public partial class SecuritySettingsWindow : Window
         var wantsNewPassword = !string.IsNullOrEmpty(NewPasswordBox.Password);
         if (wantsNewPassword)
         {
-            if (NewPasswordBox.Password.Length < 10)
+            if (NewPasswordBox.Password.Length < 12)
             {
-                ErrorText.Text = "新主密码至少需要 10 个字符。";
+                ErrorText.Text = "新主密码至少需要 12 个字符，并同时包含字母和数字。";
+                return;
+            }
+            if (!NewPasswordBox.Password.Any(char.IsLetter) ||
+                !NewPasswordBox.Password.Any(char.IsDigit))
+            {
+                ErrorText.Text = "新主密码至少需要包含一个字母和一个数字。";
                 return;
             }
             if (!string.Equals(
@@ -131,6 +142,7 @@ public partial class SecuritySettingsWindow : Window
             preferences.WebRtcLeakProtection = WebRtcCheck.IsChecked == true;
             preferences.ClearCacheOnExit = ClearCacheCheck.IsChecked == true;
             preferences.HomePage = homePage.AbsoluteUri;
+            preferences.Theme = GetSelectedTheme();
 
             var passwordMode = _metadata?.Mode == KeyProtectionMode.MasterPassword;
             foreach (var checkBox in FindAreaCheckBoxes())
@@ -176,4 +188,44 @@ public partial class SecuritySettingsWindow : Window
 
     private IEnumerable<CheckBox> FindAreaCheckBoxes() =>
         AreaLocksGrid.Children.OfType<CheckBox>();
+
+    private void SelectTheme(BrowserTheme theme)
+    {
+        MidnightThemeRadio.IsChecked = theme == BrowserTheme.MidnightEmerald;
+        DaylightThemeRadio.IsChecked = theme == BrowserTheme.PorcelainDaylight;
+        GraphiteThemeRadio.IsChecked = theme == BrowserTheme.GraphiteFocus;
+    }
+
+    private BrowserTheme GetSelectedTheme()
+    {
+        var selected = new[]
+        {
+            MidnightThemeRadio,
+            DaylightThemeRadio,
+            GraphiteThemeRadio
+        }.FirstOrDefault(radio => radio.IsChecked == true);
+
+        return Enum.TryParse<BrowserTheme>(selected?.Tag?.ToString(), out var theme)
+            ? theme
+            : BrowserTheme.MidnightEmerald;
+    }
+
+    private void ThemeRadio_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || sender is not RadioButton radio ||
+            !Enum.TryParse<BrowserTheme>(radio.Tag?.ToString(), out var theme))
+        {
+            return;
+        }
+
+        ThemeManager.Apply(theme);
+    }
+
+    private void Window_Closed(object? sender, EventArgs e)
+    {
+        if (DialogResult != true)
+        {
+            ThemeManager.Apply(_originalTheme);
+        }
+    }
 }

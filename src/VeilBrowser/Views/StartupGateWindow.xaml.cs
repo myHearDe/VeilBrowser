@@ -90,9 +90,16 @@ public partial class StartupGateWindow : Window
         ErrorText.Text = string.Empty;
         if (PasswordModeRadio.IsChecked == true)
         {
-            if (NewPasswordBox.Password.Length < 10)
+            if (NewPasswordBox.Password.Length < 12)
             {
-                ErrorText.Text = "主密码至少需要 10 个字符。";
+                ErrorText.Text = "主密码至少需要 12 个字符，并同时包含字母和数字。";
+                return;
+            }
+
+            if (!NewPasswordBox.Password.Any(char.IsLetter) ||
+                !NewPasswordBox.Password.Any(char.IsDigit))
+            {
+                ErrorText.Text = "主密码至少需要包含一个字母和一个数字。";
                 return;
             }
 

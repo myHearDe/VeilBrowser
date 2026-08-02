@@ -10,6 +10,7 @@ public sealed class AppSession : IDisposable
 {
     private readonly byte[] _masterKey;
     private readonly EncryptedJsonStore<BrowserState> _stateStore;
+    private readonly SemaphoreSlim _saveLock = new(1, 1);
     private bool _disposed;
 
     public AppSession(
@@ -24,7 +25,9 @@ public sealed class AppSession : IDisposable
         _masterKey = masterKey;
         State = state;
         HasMasterPassword = hasMasterPassword;
-        _stateStore = new EncryptedJsonStore<BrowserState>(paths.EncryptedState);
+        _stateStore = new EncryptedJsonStore<BrowserState>(
+            paths.EncryptedState,
+            DataProtectionKeys.BrowserStateContext);
     }
 
     public AppPaths Paths { get; }
@@ -33,8 +36,20 @@ public sealed class AppSession : IDisposable
     public bool HasMasterPassword { get; private set; }
     public ReadOnlyMemory<byte> MasterKey => _masterKey;
 
-    public Task SaveAsync(CancellationToken cancellationToken = default) =>
-        _stateStore.SaveAsync(State, _masterKey, cancellationToken);
+    public async Task SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _saveLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _stateStore.SaveAsync(State, _masterKey, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _saveLock.Release();
+        }
+    }
 
     public Task<bool> VerifyPasswordAsync(
         string password,
@@ -51,6 +66,7 @@ public sealed class AppSession : IDisposable
         }
 
         CryptographicOperations.ZeroMemory(_masterKey);
+        _saveLock.Dispose();
         _disposed = true;
     }
 }

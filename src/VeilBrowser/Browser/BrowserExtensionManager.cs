@@ -12,6 +12,8 @@ namespace VeilBrowser.Browser;
 public sealed class BrowserExtensionManager
 {
     private const string AdGuardName = "AdGuard";
+    private const string IntegrationVersion = "1.1.0";
+    private const int MinimumExtensionRuntimeMajor = 121;
     private readonly string _extensionFolder;
     private readonly string _installMarkerPath;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
@@ -30,9 +32,10 @@ public sealed class BrowserExtensionManager
     public bool IsReady => _adGuard is not null;
     public bool IsEnabled => _adGuard?.IsEnabled == true;
     public string DisplayName => _adGuard?.Name ?? "AdGuard 广告拦截器";
+    public string RuntimeVersion { get; private set; } = "未知";
     public string? ErrorMessage { get; private set; }
 
-    public async Task EnsureInstalledAsync(CoreWebView2Profile profile)
+    public async Task EnsureInstalledAsync(CoreWebView2 core)
     {
         if (_adGuard is not null)
         {
@@ -44,6 +47,16 @@ public sealed class BrowserExtensionManager
         {
             if (_adGuard is not null)
             {
+                return;
+            }
+
+            RuntimeVersion = core.Environment.BrowserVersionString;
+            if (!TryGetRuntimeMajor(RuntimeVersion, out var runtimeMajor) ||
+                runtimeMajor < MinimumExtensionRuntimeMajor)
+            {
+                ErrorMessage =
+                    $"当前 WebView2 内核 {RuntimeVersion} 太旧，AdGuard 5.4.3.1 " +
+                    $"至少需要 Chromium {MinimumExtensionRuntimeMajor}。请更新 Microsoft Edge WebView2 Runtime。";
                 return;
             }
 
@@ -61,17 +74,18 @@ public sealed class BrowserExtensionManager
                 .GetString() ?? "unknown";
             var desiredInstall = new ExtensionInstallMarker(
                 Path.GetFullPath(_extensionFolder),
-                version);
+                version,
+                IntegrationVersion);
             var existingMarker = await ReadInstallMarkerAsync();
 
-            var extensions = await profile.GetBrowserExtensionsAsync();
+            var extensions = await core.Profile.GetBrowserExtensionsAsync();
             _adGuard = extensions.FirstOrDefault(
                 extension => extension.Name.Contains(
                     AdGuardName,
                     StringComparison.OrdinalIgnoreCase));
             if (_adGuard is null || existingMarker != desiredInstall)
             {
-                _adGuard = await profile.AddBrowserExtensionAsync(_extensionFolder);
+                _adGuard = await core.Profile.AddBrowserExtensionAsync(_extensionFolder);
                 await WriteInstallMarkerAsync(desiredInstall);
             }
             ErrorMessage = null;
@@ -108,6 +122,13 @@ public sealed class BrowserExtensionManager
         return $"chrome-extension://{_adGuard.Id}/pages/{page.TrimStart('/')}";
     }
 
+    private static bool TryGetRuntimeMajor(string version, out int major)
+    {
+        var separator = version.IndexOf('.');
+        var majorText = separator > 0 ? version[..separator] : version;
+        return int.TryParse(majorText, out major);
+    }
+
     private async Task<ExtensionInstallMarker?> ReadInstallMarkerAsync()
     {
         if (!File.Exists(_installMarkerPath))
@@ -139,5 +160,8 @@ public sealed class BrowserExtensionManager
             JsonSerializer.Serialize(marker));
     }
 
-    private sealed record ExtensionInstallMarker(string Path, string Version);
+    private sealed record ExtensionInstallMarker(
+        string Path,
+        string Version,
+        string IntegrationVersion);
 }

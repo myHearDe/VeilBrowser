@@ -1,0 +1,12 @@
+diff --git a/Extension/src/background/api/ui/assistant.ts b/Extension/src/background/api/ui/assistant.ts
+index 0000000..1111111 100644
+--- a/Extension/src/background/api/ui/assistant.ts
++++ b/Extension/src/background/api/ui/assistant.ts
+@@
+-    static async openAssistant(): Promise<void> {
+-        const activeTab = await TabsApi.getActive();
++    static async openAssistant(message?: { data?: { tabId?: number } }): Promise<void> {
++        const requestedTabId = message?.data?.tabId;
++        const activeTab = Number.isInteger(requestedTabId)
++            ? (await TabsApi.getAll()).find((tab) => tab.id === requestedTabId)
++            : await TabsApi.getActive();

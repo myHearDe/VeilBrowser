@@ -5,7 +5,8 @@
         Title="安全与隐私设置" Width="800" Height="760"
         MinWidth="680" MinHeight="640" WindowStartupLocation="CenterOwner"
         UseLayoutRounding="True"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        Closed="Window_Closed">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -14,64 +15,146 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="36,30">
                 <StackPanel Orientation="Horizontal">
-                    <Border Width="42" Height="42" CornerRadius="12" Background="#173A38"
+                    <Border Width="42" Height="42" CornerRadius="12"
+                            Background="{DynamicResource ProtectionSurfaceBrush}"
                             Margin="0,0,13,0">
-                        <TextBlock Text="◆" Foreground="{StaticResource AccentBrush}"
+                        <TextBlock Text="◆" Foreground="{DynamicResource AccentBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                    FontSize="15" />
                     </Border>
                     <StackPanel>
                         <TextBlock Text="安全与隐私" FontSize="28" FontWeight="SemiBold" />
                         <TextBlock Text="SECURITY CONTROL"
-                                   Foreground="{StaticResource AccentBrush}"
+                                   Foreground="{DynamicResource AccentBrush}"
                                    FontSize="10" FontWeight="Bold" />
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Text="磁盘加密始终开启；下列开关决定何时需要再次验证。"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            Margin="0,12,0,24" />
 
-                <Border Background="{StaticResource SurfaceBrush}" Padding="22" Margin="0,0,0,16"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                <Border Background="{DynamicResource SurfaceBrush}" Padding="22" Margin="0,0,0,16"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="14">
+                    <StackPanel>
+                        <TextBlock Text="外观风格" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="切换后主窗口、设置、资料中心和 AdGuard 控制中心会统一更新。"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,5,0,14" TextWrapping="Wrap" />
+                        <UniformGrid Columns="3">
+                            <RadioButton x:Name="MidnightThemeRadio"
+                                         GroupName="Theme"
+                                         Tag="MidnightEmerald"
+                                         Checked="ThemeRadio_Checked"
+                                         Style="{StaticResource ThemeChoiceRadio}">
+                                <StackPanel>
+                                    <Border Height="34" CornerRadius="8" Background="#0B1116"
+                                            BorderBrush="#39D98A" BorderThickness="1">
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center">
+                                            <Ellipse Width="8" Height="8" Fill="#39D98A" />
+                                            <Rectangle Width="32" Height="5" RadiusX="2"
+                                                       Fill="#27343C" Margin="7,0,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Text="午夜翡翠" FontWeight="SemiBold" Margin="0,10,0,2" />
+                                    <TextBlock Text="深色 · 横向标签"
+                                               Foreground="{DynamicResource MutedTextBrush}"
+                                               FontSize="11" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="DaylightThemeRadio"
+                                         GroupName="Theme"
+                                         Tag="PorcelainDaylight"
+                                         Checked="ThemeRadio_Checked"
+                                         Style="{StaticResource ThemeChoiceRadio}">
+                                <StackPanel>
+                                    <Border Height="34" CornerRadius="8" Background="#F6F7F4"
+                                            BorderBrush="#008F77" BorderThickness="1">
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center">
+                                            <Ellipse Width="8" Height="8" Fill="#008F77" />
+                                            <Rectangle Width="32" Height="5" RadiusX="2"
+                                                       Fill="#D6DEDA" Margin="7,0,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Text="瓷白日光" FontWeight="SemiBold" Margin="0,10,0,2" />
+                                    <TextBlock Text="浅色 · 横向标签"
+                                               Foreground="{DynamicResource MutedTextBrush}"
+                                               FontSize="11" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="GraphiteThemeRadio"
+                                         GroupName="Theme"
+                                         Tag="GraphiteFocus"
+                                         Checked="ThemeRadio_Checked"
+                                         Style="{StaticResource ThemeChoiceRadio}"
+                                         Margin="0">
+                                <StackPanel>
+                                    <Border Height="34" CornerRadius="8" Background="#15181D"
+                                            BorderBrush="#6C98F0" BorderThickness="1">
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center">
+                                            <Rectangle Width="7" Height="20" RadiusX="2"
+                                                       Fill="#6C98F0" />
+                                            <Rectangle Width="32" Height="5" RadiusX="2"
+                                                       Fill="#353D46" Margin="7,0,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Text="石墨专注" FontWeight="SemiBold" Margin="0,10,0,2" />
+                                    <TextBlock Text="深色 · 垂直标签"
+                                               Foreground="{DynamicResource MutedTextBrush}"
+                                               FontSize="11" />
+                                </StackPanel>
+                            </RadioButton>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{DynamicResource SurfaceBrush}" Padding="22" Margin="0,0,0,16"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                         CornerRadius="14">
                     <StackPanel>
                         <TextBlock Text="主锁" FontSize="18" FontWeight="SemiBold" />
                         <TextBlock x:Name="KeyModeText"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,5,0,10" TextWrapping="Wrap" />
                         <CheckBox x:Name="StartupLockCheck" Content="启动浏览器时要求主密码" />
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <TextBlock Text="闲置自动锁定（分钟）" VerticalAlignment="Center" />
                             <TextBox x:Name="AutoLockBox" Width="70" Margin="12,0,0,0" Text="10" />
-                            <TextBlock Text="填 0 表示关闭" Foreground="{StaticResource MutedTextBrush}"
+                            <TextBlock Text="填 0 表示关闭" Foreground="{DynamicResource MutedTextBrush}"
                                        VerticalAlignment="Center" Margin="10,0,0,0" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <Border x:Name="PasswordChangePanel" Background="{StaticResource SurfaceBrush}"
+                <Border x:Name="PasswordChangePanel" Background="{DynamicResource SurfaceBrush}"
                         Padding="22" Margin="0,0,0,16"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                         CornerRadius="14">
                     <StackPanel>
                         <TextBlock x:Name="PasswordPanelTitle" Text="更改主密码"
                                    FontSize="18" FontWeight="SemiBold" />
                         <TextBlock Text="留空表示不更改。新密码至少 10 个字符。"
-                                   Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,10" />
+                                   Foreground="{DynamicResource MutedTextBrush}" Margin="0,5,0,10" />
                         <PasswordBox x:Name="NewPasswordBox" Margin="0,0,0,8"
                                      PasswordChanged="NewPasswordBox_PasswordChanged" />
                         <PasswordBox x:Name="ConfirmPasswordBox" />
                     </StackPanel>
                 </Border>
 
-                <Border Background="{StaticResource SurfaceBrush}" Padding="22" Margin="0,0,0,16"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                <Border Background="{DynamicResource SurfaceBrush}" Padding="22" Margin="0,0,0,16"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                         CornerRadius="14">
                     <StackPanel>
                         <TextBlock Text="各区域单独上锁" FontSize="18" FontWeight="SemiBold" />
                         <TextBlock x:Name="AreaLockHint"
                                    Text="打开这些页面前再次验证主密码。"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,5,0,10" />
                         <UniformGrid x:Name="AreaLocksGrid" Columns="2">
                             <CheckBox Content="浏览历史" Tag="History" />
@@ -86,8 +169,9 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="{StaticResource SurfaceBrush}" Padding="22"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                <Border Background="{DynamicResource SurfaceBrush}" Padding="22"
+                        Margin="0,0,0,16"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                         CornerRadius="14">
                     <StackPanel>
                         <TextBlock Text="浏览防护" FontSize="18" FontWeight="SemiBold" />
@@ -103,12 +187,12 @@
                         <TextBox x:Name="HomePageBox" />
                     </StackPanel>
                 </Border>
-                <TextBlock x:Name="ErrorText" Foreground="#FB7185"
+                <TextBlock x:Name="ErrorText" Foreground="{DynamicResource DangerBrush}"
                            TextWrapping="Wrap" Margin="0,14,0,0" />
             </StackPanel>
         </ScrollViewer>
-        <Border Grid.Row="1" Background="{StaticResource ChromeBrush}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
+        <Border Grid.Row="1" Background="{DynamicResource ChromeBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
                 Padding="18">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="取消" Width="100" IsCancel="True" />

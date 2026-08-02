@@ -90,11 +90,45 @@ public static class ChunkedAesGcmFile
         ReadOnlyMemory<byte> key,
         CancellationToken cancellationToken = default)
     {
+        await DecryptCoreAsync(
+            input,
+            output,
+            key,
+            allowLegacyVersion: false,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task DecryptLegacyAsync(
+        Stream input,
+        Stream output,
+        ReadOnlyMemory<byte> key,
+        CancellationToken cancellationToken = default)
+    {
+        await DecryptCoreAsync(
+            input,
+            output,
+            key,
+            allowLegacyVersion: true,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task DecryptCoreAsync(
+        Stream input,
+        Stream output,
+        ReadOnlyMemory<byte> key,
+        bool allowLegacyVersion,
+        CancellationToken cancellationToken)
+    {
         var header = new byte[8 + 1 + sizeof(int) + NonceSize];
         await ReadExactlyAsync(input, header, cancellationToken).ConfigureAwait(false);
         var version = header[8];
+        // Version 1 had no authenticated end-of-file record and could be
+        // truncated at a chunk boundary without detection. Public callers do
+        // not accept it; ProfileContainerService has a constrained one-time
+        // migration path whose output must also be a structurally valid ZIP.
         if (!header.AsSpan(0, 8).SequenceEqual(Magic) ||
-            version is not (LegacyVersion or CurrentVersion))
+            (version != CurrentVersion &&
+             !(allowLegacyVersion && version == LegacyVersion)))
         {
             throw new CryptographicException("Invalid profile container.");
         }

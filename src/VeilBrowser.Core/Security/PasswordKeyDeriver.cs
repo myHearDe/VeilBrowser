@@ -8,6 +8,7 @@ public static class PasswordKeyDeriver
 {
     public const int SaltSize = 16;
     public const int KeySize = 32;
+    public const int MinimumPasswordLength = 12;
 
     public static byte[] CreateSalt() => RandomNumberGenerator.GetBytes(SaltSize);
 
@@ -31,7 +32,7 @@ public static class PasswordKeyDeriver
             {
                 Salt = saltBytes,
                 DegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 1, 4),
-                Iterations = 3,
+                Iterations = 4,
                 MemorySize = 64 * 1024
             };
 
@@ -50,6 +51,24 @@ public static class PasswordKeyDeriver
     {
         ReadOnlySpan<byte> context = "VeilBrowser master key verifier v1"u8;
         return HMACSHA256.HashData(key, context);
+    }
+
+    public static void ValidateNewPassword(string password)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+        if (password.Length < MinimumPasswordLength)
+        {
+            throw new ArgumentException(
+                $"Master password must contain at least {MinimumPasswordLength} characters.",
+                nameof(password));
+        }
+
+        if (!password.Any(char.IsLetter) || !password.Any(char.IsDigit))
+        {
+            throw new ArgumentException(
+                "Master password must contain at least one letter and one number.",
+                nameof(password));
+        }
     }
 
     public static bool Verify(ReadOnlySpan<byte> key, ReadOnlySpan<byte> expectedVerifier)

@@ -29,6 +29,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installe
 
 版本号自动读取 `src\VeilBrowser\VeilBrowser.csproj` 的 `<Version>`。
 
+## 正式代码签名
+
+不要先签名 `bin` 目录后再运行普通发布流程，因为 `dotnet publish` 会重新生成文件。
+请双击根目录 `一键打包新版.cmd`：脚本发布最终程序后暂停，等待人工签名；收到
+`CONTINUE` 后才编译安装包，并再次暂停等待安装包签名。完整说明见根目录
+`SIGNING.zh-CN.md`。
+
 ## 安装行为
 
 - 中文现代安装向导。
@@ -39,6 +46,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installe
 - 检测正在运行的 VeilBrowser，避免覆盖使用中的程序文件。
 - 安装完成后可直接启动浏览器。
 - 使用固定 `AppId`，再次运行新版本安装包时执行原位升级。
+- 安装器要求 Windows 10 22H2（build 19045）或 Windows 11 x64；原因见
+  `docs\PLATFORM-SUPPORT.zh-CN.md`。
 
 ## 卸载行为
 
@@ -59,7 +68,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installe
 静默安装：
 
 ```powershell
-.\VeilBrowser-Setup-0.3.0-x64.exe /VERYSILENT /NORESTART
+.\VeilBrowser-Setup-0.4.0-x64.exe /VERYSILENT /NORESTART
 ```
 
 静默卸载并保留用户数据：

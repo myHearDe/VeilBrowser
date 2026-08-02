@@ -45,42 +45,66 @@ public sealed class SecurityBootstrapService
         bool startupLock,
         CancellationToken cancellationToken = default)
     {
+        PasswordKeyDeriver.ValidateNewPassword(password);
         var salt = PasswordKeyDeriver.CreateSalt();
         var unlockKey = await PasswordKeyDeriver.DeriveAsync(password, salt, cancellationToken)
             .ConfigureAwait(false);
         var masterKey = RandomNumberGenerator.GetBytes(32);
         var verifier = PasswordKeyDeriver.CreateVerifier(unlockKey);
-        var wrappedMasterKey = AesGcmEnvelope.Encrypt(masterKey, unlockKey);
-        var metadata = new SecurityMetadata
+        var wrappingKey = DataProtectionKeys.Derive(
+            unlockKey,
+            DataProtectionKeys.MasterKeyWrapContext);
+        var wrappedMasterKey = AesGcmEnvelope.Encrypt(masterKey, wrappingKey);
+        try
         {
-            Mode = KeyProtectionMode.MasterPassword,
-            StartupLock = startupLock,
-            SaltBase64 = Convert.ToBase64String(salt),
-            VerifierBase64 = Convert.ToBase64String(verifier),
-            WrappedMasterKeyBase64 = Convert.ToBase64String(wrappedMasterKey),
-            DpapiProtectedKeyBase64 = startupLock ? string.Empty : ProtectForCurrentUser(masterKey)
-        };
+            var metadata = new SecurityMetadata
+            {
+                Mode = KeyProtectionMode.MasterPassword,
+                StartupLock = startupLock,
+                SaltBase64 = Convert.ToBase64String(salt),
+                VerifierBase64 = Convert.ToBase64String(verifier),
+                WrappedMasterKeyBase64 = Convert.ToBase64String(wrappedMasterKey),
+                DpapiProtectedKeyBase64 = startupLock ? string.Empty : ProtectForCurrentUser(masterKey)
+            };
 
-        await WriteMetadataAsync(metadata, cancellationToken).ConfigureAwait(false);
-        CryptographicOperations.ZeroMemory(unlockKey);
-        CryptographicOperations.ZeroMemory(verifier);
-        CryptographicOperations.ZeroMemory(wrappedMasterKey);
-        CryptographicOperations.ZeroMemory(salt);
-        return masterKey;
+            await WriteMetadataAsync(metadata, cancellationToken).ConfigureAwait(false);
+            return masterKey;
+        }
+        catch
+        {
+            CryptographicOperations.ZeroMemory(masterKey);
+            throw;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(unlockKey);
+            CryptographicOperations.ZeroMemory(wrappingKey);
+            CryptographicOperations.ZeroMemory(verifier);
+            CryptographicOperations.ZeroMemory(wrappedMasterKey);
+            CryptographicOperations.ZeroMemory(salt);
+        }
     }
 
     public async Task<byte[]> ConfigureWindowsAccountAsync(
         CancellationToken cancellationToken = default)
     {
         var key = RandomNumberGenerator.GetBytes(32);
-        var metadata = new SecurityMetadata
+        try
         {
-            Mode = KeyProtectionMode.WindowsAccount,
-            StartupLock = false,
-            DpapiProtectedKeyBase64 = ProtectForCurrentUser(key)
-        };
-        await WriteMetadataAsync(metadata, cancellationToken).ConfigureAwait(false);
-        return key;
+            var metadata = new SecurityMetadata
+            {
+                Mode = KeyProtectionMode.WindowsAccount,
+                StartupLock = false,
+                DpapiProtectedKeyBase64 = ProtectForCurrentUser(key)
+            };
+            await WriteMetadataAsync(metadata, cancellationToken).ConfigureAwait(false);
+            return key;
+        }
+        catch
+        {
+            CryptographicOperations.ZeroMemory(key);
+            throw;
+        }
     }
 
     public async Task<byte[]?> TryUnlockWithoutPasswordAsync(
@@ -117,14 +141,25 @@ public sealed class SecurityBootstrapService
         {
             CryptographicOperations.ZeroMemory(expectedVerifier);
             var wrappedMasterKey = Convert.FromBase64String(metadata.WrappedMasterKeyBase64);
+            var wrappingKey = DataProtectionKeys.Derive(
+                unlockKey,
+                DataProtectionKeys.MasterKeyWrapContext);
             byte[] masterKey;
             try
             {
-                masterKey = AesGcmEnvelope.Decrypt(wrappedMasterKey, unlockKey);
+                try
+                {
+                    masterKey = AesGcmEnvelope.Decrypt(wrappedMasterKey, wrappingKey);
+                }
+                catch (CryptographicException)
+                {
+                    masterKey = AesGcmEnvelope.Decrypt(wrappedMasterKey, unlockKey);
+                }
             }
             finally
             {
                 CryptographicOperations.ZeroMemory(wrappedMasterKey);
+                CryptographicOperations.ZeroMemory(wrappingKey);
                 CryptographicOperations.ZeroMemory(unlockKey);
             }
             if (File.Exists(_paths.ForceLockMarker))
@@ -178,11 +213,15 @@ public sealed class SecurityBootstrapService
         ReadOnlyMemory<byte> currentMasterKey,
         CancellationToken cancellationToken = default)
     {
+        PasswordKeyDeriver.ValidateNewPassword(newPassword);
         var salt = PasswordKeyDeriver.CreateSalt();
         var unlockKey = await PasswordKeyDeriver.DeriveAsync(
             newPassword, salt, cancellationToken).ConfigureAwait(false);
         var verifier = PasswordKeyDeriver.CreateVerifier(unlockKey);
-        var wrappedMasterKey = AesGcmEnvelope.Encrypt(currentMasterKey.Span, unlockKey);
+        var wrappingKey = DataProtectionKeys.Derive(
+            unlockKey,
+            DataProtectionKeys.MasterKeyWrapContext);
+        var wrappedMasterKey = AesGcmEnvelope.Encrypt(currentMasterKey.Span, wrappingKey);
         try
         {
             var metadata = new SecurityMetadata
@@ -202,6 +241,7 @@ public sealed class SecurityBootstrapService
         {
             CryptographicOperations.ZeroMemory(salt);
             CryptographicOperations.ZeroMemory(unlockKey);
+            CryptographicOperations.ZeroMemory(wrappingKey);
             CryptographicOperations.ZeroMemory(verifier);
             CryptographicOperations.ZeroMemory(wrappedMasterKey);
         }
@@ -225,28 +265,49 @@ public sealed class SecurityBootstrapService
         CancellationToken cancellationToken)
     {
         var temporaryPath = _paths.SecurityMetadata + ".new";
-        await using (var stream = new FileStream(
-            temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        try
         {
-            await JsonSerializer.SerializeAsync(
-                stream, metadata, JsonOptions, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-        }
+            await using (var stream = new FileStream(
+                temporaryPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                64 * 1024,
+                FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await JsonSerializer.SerializeAsync(
+                    stream, metadata, JsonOptions, cancellationToken).ConfigureAwait(false);
+                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
 
-        File.Move(temporaryPath, _paths.SecurityMetadata, overwrite: true);
+            File.Move(temporaryPath, _paths.SecurityMetadata, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 
     private static string ProtectForCurrentUser(ReadOnlySpan<byte> key)
     {
-        var protectedBytes = ProtectedData.Protect(
-            key.ToArray(), DpapiEntropy, DataProtectionScope.CurrentUser);
+        var keyBytes = key.ToArray();
+        byte[]? protectedBytes = null;
         try
         {
+            protectedBytes = ProtectedData.Protect(
+                keyBytes, DpapiEntropy, DataProtectionScope.CurrentUser);
             return Convert.ToBase64String(protectedBytes);
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(protectedBytes);
+            CryptographicOperations.ZeroMemory(keyBytes);
+            if (protectedBytes is not null)
+            {
+                CryptographicOperations.ZeroMemory(protectedBytes);
+            }
         }
     }
 

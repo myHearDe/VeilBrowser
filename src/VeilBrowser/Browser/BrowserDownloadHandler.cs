@@ -21,22 +21,34 @@ public sealed class BrowserDownloadHandler
         var operation = e.DownloadOperation;
         var entry = GetOrCreate(operation);
         entry.FullPath = e.ResultFilePath;
-        entry.FileName = Path.GetFileName(e.ResultFilePath);
+        entry.FileName = GetSafeFileName(e.ResultFilePath, operation.Uri);
         UpdateEntry(operation, entry);
 
-        operation.BytesReceivedChanged += (_, _) =>
-        {
-            UpdateEntry(operation, entry);
-            _onUpdated(entry);
-        };
-        operation.StateChanged += (_, _) =>
-        {
-            UpdateEntry(operation, entry);
-            _onUpdated(entry);
-        };
+        operation.BytesReceivedChanged += Operation_BytesReceivedChanged;
+        operation.StateChanged += Operation_StateChanged;
 
         // Keep Handled=false so WebView2 shows its normal save/download UI.
         _onUpdated(entry);
+        return;
+
+        void Operation_BytesReceivedChanged(object? _, object __)
+        {
+            UpdateEntry(operation, entry);
+            _onUpdated(entry);
+        }
+
+        void Operation_StateChanged(object? _, object __)
+        {
+            UpdateEntry(operation, entry);
+            _onUpdated(entry);
+            if (operation.State is CoreWebView2DownloadState.Completed or
+                CoreWebView2DownloadState.Interrupted)
+            {
+                operation.BytesReceivedChanged -= Operation_BytesReceivedChanged;
+                operation.StateChanged -= Operation_StateChanged;
+                _downloads.Remove(operation);
+            }
+        }
     }
 
     private DownloadEntry GetOrCreate(CoreWebView2DownloadOperation operation)
@@ -48,7 +60,7 @@ public sealed class BrowserDownloadHandler
 
         var created = new DownloadEntry
         {
-            FileName = Path.GetFileName(operation.ResultFilePath),
+            FileName = GetSafeFileName(operation.ResultFilePath, operation.Uri),
             Url = operation.Uri,
             FullPath = operation.ResultFilePath,
             TotalBytes = ToInt64(operation.TotalBytesToReceive ?? 0),
@@ -63,13 +75,38 @@ public sealed class BrowserDownloadHandler
         DownloadEntry entry)
     {
         entry.FullPath = operation.ResultFilePath;
-        entry.FileName = Path.GetFileName(operation.ResultFilePath);
+        entry.FileName = GetSafeFileName(operation.ResultFilePath, operation.Uri);
         entry.TotalBytes = ToInt64(operation.TotalBytesToReceive ?? 0);
         entry.ReceivedBytes = operation.BytesReceived;
         entry.IsComplete = operation.State == CoreWebView2DownloadState.Completed;
+        entry.IsInterrupted = operation.State == CoreWebView2DownloadState.Interrupted;
         entry.IsCancelled =
-            operation.State == CoreWebView2DownloadState.Interrupted &&
+            entry.IsInterrupted &&
             operation.InterruptReason == CoreWebView2DownloadInterruptReason.UserCanceled;
+        entry.InterruptReason = entry.IsInterrupted
+            ? operation.InterruptReason.ToString()
+            : string.Empty;
+    }
+
+    private static string GetSafeFileName(string? resultPath, string? uri)
+    {
+        try
+        {
+            var fileName = Path.GetFileName(resultPath);
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                return fileName;
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Fall back to the URL or a neutral name for malformed paths.
+        }
+
+        return Uri.TryCreate(uri, UriKind.Absolute, out var parsed) &&
+               !string.IsNullOrWhiteSpace(Path.GetFileName(parsed.LocalPath))
+            ? Path.GetFileName(parsed.LocalPath)
+            : "download";
     }
 
     private static long ToInt64(ulong value) =>
